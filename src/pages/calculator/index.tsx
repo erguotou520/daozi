@@ -1,6 +1,6 @@
 import { useTitle } from '@/hooks'
 import { convertNumberToChinese } from '@/utils'
-import { defineComponent, ref } from 'vue'
+import { defineComponent, Ref, ref } from 'vue'
 import CalcGroup from './components/CalcGroup'
 import CalcItem from './components/CalcItem'
 
@@ -10,6 +10,23 @@ const pairList = [1, 2, 3, 4]
 const countList = [8, 9, 10, 11, 12, 13, 14]
 // 联通数
 const sameList = [5, 6, 7, 8]
+// 额外加分
+const extraList = ['小连号', '大连号', '棒棒', '不动手', '四活', '草一色', '对对胡', '七对']
+// 加摸子
+const moziList = ['枯只压', '三打一', '自摸', '杠开', '清水']
+// 大拿
+const superList = [
+  '双连号',
+  '双棒棒',
+  '双通',
+  '双四活',
+  '一一九',
+  '清一色',
+  '双杠',
+  '三杠',
+  '三大坎',
+  '乱分'
+]
 
 const CalculatorPage = defineComponent({
   name: 'CalculatorPage',
@@ -22,53 +39,87 @@ const CalculatorPage = defineComponent({
     const pairSelected = ref<number[]>([])
     const countSelected = ref<number[]>([])
     const sameSelected = ref<number[]>([])
+    const extraSelected = ref<string[]>([])
+    const moziSelected = ref<string[]>([])
+    const superSelected = ref<string[]>([])
+
+    const toggleSelected = (list: Ref<(string | number)[]>, item: string | number) => {
+      const index = list.value.indexOf(item)
+      if (index > -1) {
+        list.value.splice(index, 1)
+      } else {
+        list.value.push(item)
+      }
+    }
 
     return () => (
       <div>
         <div class="flex bg-[#535455] bg-opacity-75 h-12 items-center relative"></div>
         <CalcGroup title="对子数">
           {pairList.map(pair => (
-            <CalcItem key={pair}>{convertNumberToChinese(pair)}对</CalcItem>
+            <CalcItem
+              key={pair}
+              selected={pairSelected.value.includes(pair)}
+              onClick={() => toggleSelected(pairSelected, pair)}
+            >
+              {convertNumberToChinese(pair)}对
+            </CalcItem>
           ))}
         </CalcGroup>
         <CalcGroup title="只子数">
           {countList.map(count => (
-            <CalcItem key={count}>{convertNumberToChinese(count)}只</CalcItem>
+            <CalcItem
+              key={count}
+              selected={countSelected.value.includes(count)}
+              onClick={() => toggleSelected(countSelected, count)}
+            >
+              {convertNumberToChinese(count)}只
+            </CalcItem>
           ))}
         </CalcGroup>
         <CalcGroup title="联通数">
           {sameList.map(same => (
-            <CalcItem key={same}>{convertNumberToChinese(same)}通</CalcItem>
+            <CalcItem
+              key={same}
+              selected={sameSelected.value.includes(same)}
+              onClick={() => toggleSelected(sameSelected, same)}
+            >
+              {convertNumberToChinese(same)}通
+            </CalcItem>
           ))}
         </CalcGroup>
         <CalcGroup title="加点子">
-          <CalcItem>小连号</CalcItem>
-          <CalcItem>大连号</CalcItem>
-          <CalcItem>棒棒</CalcItem>
-          <CalcItem>不动手</CalcItem>
-          <CalcItem>四活</CalcItem>
-          <CalcItem>草一色</CalcItem>
-          <CalcItem>对对胡</CalcItem>
-          <CalcItem>七对</CalcItem>
+          {extraList.map(extra => (
+            <CalcItem
+              key={extra}
+              selected={extraSelected.value.includes(extra)}
+              onClick={() => toggleSelected(extraSelected, extra)}
+            >
+              {extra}
+            </CalcItem>
+          ))}
         </CalcGroup>
         <CalcGroup title="加摸子">
-          <CalcItem>枯只压</CalcItem>
-          <CalcItem>三打一</CalcItem>
-          <CalcItem>自摸</CalcItem>
-          <CalcItem>杠开</CalcItem>
-          <CalcItem>清水</CalcItem>
+          {moziList.map(mozi => (
+            <CalcItem
+              key={mozi}
+              selected={moziSelected.value.includes(mozi)}
+              onClick={() => toggleSelected(moziSelected, mozi)}
+            >
+              {mozi}
+            </CalcItem>
+          ))}
         </CalcGroup>
         <CalcGroup title="大拿">
-          <CalcItem>双连号</CalcItem>
-          <CalcItem>双棒棒</CalcItem>
-          <CalcItem>双通</CalcItem>
-          <CalcItem>双四活</CalcItem>
-          <CalcItem>一一九</CalcItem>
-          <CalcItem>清一色</CalcItem>
-          <CalcItem>双杠</CalcItem>
-          <CalcItem>三杠</CalcItem>
-          <CalcItem>三大坎</CalcItem>
-          <CalcItem>乱分</CalcItem>
+          {superList.map(sup => (
+            <CalcItem
+              key={sup}
+              selected={superSelected.value.includes(sup)}
+              onClick={() => toggleSelected(superSelected, sup)}
+            >
+              {sup}
+            </CalcItem>
+          ))}
         </CalcGroup>
       </div>
     )
