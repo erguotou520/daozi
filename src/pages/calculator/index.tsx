@@ -1,6 +1,6 @@
 import { useTitle } from '@/hooks'
-import { convertNumberToChinese } from '@/utils'
-import { defineComponent, Ref, ref } from 'vue'
+import { convertNumberToChinese, omitArray } from '@/utils'
+import { computed, defineComponent, Ref, ref } from 'vue'
 import CalcGroup from './components/CalcGroup'
 import CalcItem from './components/CalcItem'
 
@@ -8,7 +8,7 @@ import CalcItem from './components/CalcItem'
 const pairList = [1, 2, 3, 4]
 // 只子数
 const countList = [8, 9, 10, 11, 12, 13, 14]
-// 联通数
+// 连通数
 const sameList = [5, 6, 7, 8]
 // 额外加分
 const extraList = ['小连号', '大连号', '棒棒', '不动手', '四活', '草一色', '对对胡', '七对']
@@ -43,24 +43,59 @@ const CalculatorPage = defineComponent({
     const moziSelected = ref<string[]>([])
     const superSelected = ref<string[]>([])
 
-    const toggleSelected = (list: Ref<(string | number)[]>, item: string | number) => {
+    /**
+     * 切换选中/未选中
+     * @param list 列表
+     * @param item 选中的项
+     * @param mutex 互斥选项 默认 false，只解决本组互斥性
+     */
+    const toggleSelected = (list: Ref<(string | number)[]>, item: string | number, mutex: boolean = false) => {
       const index = list.value.indexOf(item)
       if (index > -1) {
         list.value.splice(index, 1)
       } else {
-        list.value.push(item)
+        if (mutex === true) {
+          list.value = [item]
+        } else {
+          list.value.push(item)
+        }
+        // 选中后校验和其它已选项之间的互斥性
+        checkMutex(list, item)
       }
     }
 
+    /**
+     * 检验成牌互斥性
+     * @param list 列表
+     * @param item 选中的项
+     */
+    const checkMutex = (list: Ref<(string | number)[]>, item: string | number) => {
+      //
+    }
+
+    /**
+     * 计算得分
+     */
+    const calcScore = () => {
+      let base = 0
+      return base
+    }
+
+    const score = computed(() => {
+      return calcScore()
+    })
+
     return () => (
       <div>
-        <div class="flex bg-[#535455] bg-opacity-75 h-12 items-center relative"></div>
+        <div class="flex bg-[#535455] bg-opacity-75 h-12 text-white px-4 items-center relative">
+          {score.value}
+        </div>
         <CalcGroup title="对子数">
           {pairList.map(pair => (
             <CalcItem
               key={pair}
               selected={pairSelected.value.includes(pair)}
-              onClick={() => toggleSelected(pairSelected, pair)}
+              onClick={() => toggleSelected(pairSelected, pair, true)}
             >
               {convertNumberToChinese(pair)}对
             </CalcItem>
@@ -71,18 +106,18 @@ const CalculatorPage = defineComponent({
             <CalcItem
               key={count}
               selected={countSelected.value.includes(count)}
-              onClick={() => toggleSelected(countSelected, count)}
+              onClick={() => toggleSelected(countSelected, count, true)}
             >
               {convertNumberToChinese(count)}只
             </CalcItem>
           ))}
         </CalcGroup>
-        <CalcGroup title="联通数">
+        <CalcGroup title="连通数">
           {sameList.map(same => (
             <CalcItem
               key={same}
               selected={sameSelected.value.includes(same)}
-              onClick={() => toggleSelected(sameSelected, same)}
+              onClick={() => toggleSelected(sameSelected, same, true)}
             >
               {convertNumberToChinese(same)}通
             </CalcItem>
@@ -115,7 +150,7 @@ const CalculatorPage = defineComponent({
             <CalcItem
               key={sup}
               selected={superSelected.value.includes(sup)}
-              onClick={() => toggleSelected(superSelected, sup)}
+              onClick={() => toggleSelected(superSelected, sup, true)}
             >
               {sup}
             </CalcItem>
