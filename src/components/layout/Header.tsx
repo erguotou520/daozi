@@ -31,7 +31,7 @@ const TheHeader = defineComponent({
           ]}
           onClick={back}
         >
-          <LeftOutlined />
+          <LeftOutlined class="text-white" />
         </div>
         <div class="flex-1 text-center text-white px-10 truncate">{props.title}</div>
         <div class="flex-shrink-0 w-12"></div>

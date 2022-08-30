@@ -1,13 +1,15 @@
 import { defineComponent } from 'vue'
 import { RouterView } from 'vue-router'
-import { ResizeDetection } from './components'
+import { CommonLayout, ResizeDetection } from './components'
 
 const App = defineComponent({
   name: 'App',
   setup() {
     return () => (
       <ResizeDetection>
-        <RouterView />
+        <CommonLayout>
+          <RouterView />
+        </CommonLayout>
       </ResizeDetection>
     )
   }
