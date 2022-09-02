@@ -11,9 +11,9 @@ const countList = [8, 9, 10, 11, 12, 13, 14]
 // 连通数
 const sameList = [5, 6, 7, 8]
 // 额外加分
-const extraList = ['小连号', '大连号', '棒棒', '不动手', '四活', '草一色', '对对胡', '七对']
+const extraList = ['小连号', '大连号', '棒棒', '不动手', '四活', '草一色', '对对胡', '七对', '大吊车', '老小对']
 // 加摸子
-const moziList = ['枯只压', '三打一', '自摸', '杠开', '清水']
+const moziList = ['枯只压', '三打一', '自摸(小)', '自摸(大)', '杠开', '清水']
 // 大拿
 const superList = [
   '双连号',
@@ -33,7 +33,21 @@ const mutexedExtra = [
   ['小连号', '大连号', '对对胡', '七对'],
   ['大连号', '棒棒', '对对胡'],
   ['四活', '对对胡']
-]
+] as const
+
+// 单独点子数
+const extraScoreMap = {
+  小连号: 5,
+  大连号: 20,
+  棒棒: 5,
+  不动手: 5,
+  四活: 10,
+  草一色: 10,
+  对对胡: 10,
+  七对: 31,
+  大吊车: 31,
+  老小对: 5
+} as const
 
 const CalculatorPage = defineComponent({
   name: 'CalculatorPage',
@@ -108,18 +122,111 @@ const CalculatorPage = defineComponent({
      * 计算得分
      */
     const calcScore = () => {
-      let base = 0
-      return base
+      let isSuper = false
+      // 直接大拿牌
+      if (superSelected.value.length) {
+        isSuper = true
+      }
+      let score = []
+      // 对子
+      if (pairSelected.value.length) {
+        score.push(pairSelected.value[0])
+      }
+      // 只子
+      if (countSelected.value.length) {
+        score.push(countSelected.value[0] - 2)
+      }
+      // 通
+      if (sameSelected.value.length) {
+        score.push(countSelected.value[0])
+      }
+      // 额外点子
+      if (extraSelected.value.length) {
+        for (const item of extraSelected.value) {
+          score.push(extraScoreMap[item as keyof typeof extraScoreMap])
+        }
+      }
+      // 加倍
+      const times: number[] = []
+      // 加摸子
+      const mozi: number[] = []
+      if (moziSelected.value.length) {
+        if (moziSelected.value.includes('枯只压')) {
+          score.push(20)
+          mozi.push(0.5)
+        }
+        if (moziSelected.value.includes('三打一')) {
+          mozi.push(0.5)
+        }
+        if (moziSelected.value.includes('自摸(小)')) {
+          times.push(2)
+          mozi.push(0.5)
+        }
+        if (moziSelected.value.includes('自摸(大)')) {
+          times.push(2)
+          mozi.push(1)
+        }
+        if (moziSelected.value.includes('杠开')) {
+          times.push(2)
+          mozi.push(1)
+        }
+        if (moziSelected.value.includes('清水')) {
+          mozi.push(1.5)
+        }
+      }
+      return { isSuper, score, mozi, times }
     }
 
-    const score = computed(() => {
-      return calcScore()
+    const calcArray = (arr: number[]) => arr.reduce<number>((count, item) => count += item, 0)
+
+    const scoreText = computed(() => {
+      let scoreTxt = ''
+      let moziTxt = ''
+      const { isSuper, score, mozi, times } = calcScore()
+      if (isSuper) {
+        scoreTxt = '大拿'
+      } else {
+        // 2大牌
+        if (score.includes(31) && score.includes(10)) {
+          scoreTxt = '大拿'
+        } else {
+          const scoreCount = (times.length ? calcArray(times) : 1) * calcArray(score)
+          if (scoreCount >= 50) {
+            scoreTxt = '大拿'
+          } else {
+            scoreTxt = `${times.length ? `${times.join(' * ')} * (` : ''}${score.join(' + ')}${times.length ? ')' : ''} = ${scoreCount}`
+          }
+        }
+        if (mozi.length) {
+          const moziCount = calcArray(mozi)
+          // 大摸子
+          const bigMozi = Math.floor(moziCount)
+          // 小摸子
+          const smallMozi = (moziCount - bigMozi) * 2
+          const arr = []
+          if (bigMozi) {
+            arr.push(`${bigMozi}个大摸子`)
+          }
+          if (smallMozi) {
+            arr.push(`${smallMozi}个小摸子`)
+          }
+          moziTxt = arr.join(' + ')
+        }
+      }
+      const scoreDom = <div class="text-lg">{scoreTxt}</div>
+      if (mozi.length) {
+        return <div>
+          {scoreDom}
+          <div class="text-sm">{moziTxt}</div>
+        </div>
+      }
+      return scoreDom
     })
 
     return () => (
       <div>
         <div class="flex bg-[#535455] bg-opacity-75 h-12 text-white px-4 items-center relative">
-          {score.value}
+          {scoreText.value}
         </div>
         <CalcGroup title="对子数">
           {pairList.map(pair => (
