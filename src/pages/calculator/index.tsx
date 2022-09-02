@@ -33,7 +33,7 @@ const mutexedExtra = [
   ['小连号', '大连号', '对对胡', '七对'],
   ['大连号', '棒棒', '对对胡'],
   ['四活', '对对胡']
-] as const
+]
 
 // 单独点子数
 const extraScoreMap = {
