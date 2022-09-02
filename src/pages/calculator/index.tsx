@@ -28,6 +28,13 @@ const superList = [
   '乱分'
 ]
 
+// 加点子中互斥的牌型
+const mutexedExtra = [
+  ['小连号', '大连号', '对对胡', '七对'],
+  ['大连号', '棒棒', '对对胡'],
+  ['四活', '对对胡']
+]
+
 const CalculatorPage = defineComponent({
   name: 'CalculatorPage',
   setup(props, ctx) {
@@ -66,11 +73,35 @@ const CalculatorPage = defineComponent({
 
     /**
      * 检验成牌互斥性
+     * 1. 选中大拿则清空除摸子以外的牌
+     * 2. 加点子里的一些互斥牌
      * @param list 列表
      * @param item 选中的项
      */
     const checkMutex = (list: Ref<(string | number)[]>, item: string | number) => {
-      //
+      if (list === superSelected) {
+        pairSelected.value = []
+        countSelected.value = []
+        sameSelected.value = []
+      } else {
+        if (superSelected.value.length) {
+          superSelected.value = []
+        }
+        if (list === extraSelected) {
+          for (const _list of mutexedExtra) {
+            if (_list.includes(item as string)) {
+              for (const _item of _list) {
+                if (_item !== item) {
+                  const index = list.value.indexOf(_item)
+                  if (~index) {
+                    list.value.splice(index, 1)
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
     }
 
     /**
