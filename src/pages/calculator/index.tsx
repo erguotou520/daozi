@@ -63,6 +63,29 @@ const CalculatorPage = defineComponent({
     const extraSelected = ref<string[]>([])
     const moziSelected = ref<string[]>([])
     const superSelected = ref<string[]>([])
+    // 最小的杂牌 5点
+    const smallestSelected = ref(false)
+
+    /**
+     * 是否选了最小的成牌
+     */
+    const toggleSmallest = () => {
+      smallestSelected.value = !smallestSelected.value
+      if (smallestSelected.value) {
+        pairSelected.value = []
+        countSelected.value = []
+        sameSelected.value = []
+        extraSelected.value = []
+        superSelected.value = []
+        const mutexList = ['杠开', '清水']
+        for (const mutex of mutexList) {
+          const index = moziSelected.value.indexOf(mutex)
+          if (~index) {
+            moziSelected.value.splice(index, 1)
+          }
+        }
+      }
+    }
 
     /**
      * 切换选中/未选中
@@ -93,15 +116,34 @@ const CalculatorPage = defineComponent({
      * @param item 选中的项
      */
     const checkMutex = (list: Ref<(string | number)[]>, item: string | number) => {
+      // 如果已选择杂牌
+      if (smallestSelected.value) {
+        if (list !== moziSelected || (['杠开', '清水'].includes(item as string))) {
+          smallestSelected.value = false
+        }
+      }
+      // 草一色和通冲突
+      if (item === '草一色') {
+        sameSelected.value = []
+      }
+      if (list === sameSelected) {
+        const index = extraSelected.value.indexOf('草一色')
+        if (~index) {
+          extraSelected.value.splice(index, 1)
+        }
+      }
+      // 大拿牌
       if (list === superSelected) {
         pairSelected.value = []
         countSelected.value = []
         sameSelected.value = []
       } else {
+        // 非大拿 清空大拿牌
         if (superSelected.value.length) {
           superSelected.value = []
         }
         if (list === extraSelected) {
+          // 加点子之间的冲突
           for (const _list of mutexedExtra) {
             if (_list.includes(item as string)) {
               for (const _item of _list) {
@@ -128,6 +170,10 @@ const CalculatorPage = defineComponent({
         isSuper = true
       }
       let score = []
+      // 杂牌
+      if (smallestSelected.value) {
+        score.push(5)
+      }
       // 对子
       if (pairSelected.value.length) {
         score.push(pairSelected.value[0])
@@ -138,7 +184,7 @@ const CalculatorPage = defineComponent({
       }
       // 通
       if (sameSelected.value.length) {
-        score.push(countSelected.value[0])
+        score.push(sameSelected.value[0])
       }
       // 额外点子
       if (extraSelected.value.length) {
@@ -233,16 +279,19 @@ const CalculatorPage = defineComponent({
             <CalcItem
               key={pair}
               selected={pairSelected.value.includes(pair)}
+              point={pair}
               onClick={() => toggleSelected(pairSelected, pair, true)}
             >
               {convertNumberToChinese(pair)}对
             </CalcItem>
           ))}
+          <CalcItem class="bg-purple-100 border-purple-200" selected={smallestSelected.value} onClick={toggleSmallest}>杂牌</CalcItem>
         </CalcGroup>
         <CalcGroup title="只子数">
           {countList.map(count => (
             <CalcItem
               key={count}
+              point={count - 2}
               selected={countSelected.value.includes(count)}
               onClick={() => toggleSelected(countSelected, count, true)}
             >
@@ -254,6 +303,7 @@ const CalculatorPage = defineComponent({
           {sameList.map(same => (
             <CalcItem
               key={same}
+              point={same}
               selected={sameSelected.value.includes(same)}
               onClick={() => toggleSelected(sameSelected, same, true)}
             >
@@ -265,6 +315,7 @@ const CalculatorPage = defineComponent({
           {extraList.map(extra => (
             <CalcItem
               key={extra}
+              point={extraScoreMap[extra as keyof typeof extraScoreMap]}
               selected={extraSelected.value.includes(extra)}
               onClick={() => toggleSelected(extraSelected, extra)}
             >

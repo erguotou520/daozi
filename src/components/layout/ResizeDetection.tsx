@@ -1,4 +1,4 @@
-import { defineComponent, onMounted } from 'vue'
+import { defineComponent, onMounted, onUnmounted } from 'vue'
 
 const ResizeDetection = defineComponent({
   name: 'ResizeDetection',
@@ -7,7 +7,14 @@ const ResizeDetection = defineComponent({
       document.documentElement.style.fontSize = `${document.body.clientWidth / 375 * 16}px`
     }
 
-    onMounted(calcBaseFontSize)
+    onMounted(() => {
+      calcBaseFontSize()
+      document.addEventListener('resize', calcBaseFontSize)
+    })
+
+    onUnmounted(() => {
+      document.removeEventListener('resize', calcBaseFontSize)
+    })
 
     return () => ctx.slots.default?.()
   }
