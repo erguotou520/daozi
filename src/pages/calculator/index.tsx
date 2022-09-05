@@ -11,7 +11,18 @@ const countList = [8, 9, 10, 11, 12, 13, 14]
 // 连通数
 const sameList = [5, 6, 7, 8]
 // 额外加分
-const extraList = ['小连号', '大连号', '棒棒', '不动手', '四活', '草一色', '对对胡', '七对', '大吊车', '老小对']
+const extraList = [
+  '小连号',
+  '大连号',
+  '棒棒',
+  '不动手',
+  '四活',
+  '草一色',
+  '对对胡',
+  '七对',
+  '大吊车',
+  '老小对'
+]
 // 加摸子
 const moziList = ['枯只压', '三打一', '自摸(小)', '自摸(大)', '杠开', '清水']
 // 大拿
@@ -67,23 +78,25 @@ const CalculatorPage = defineComponent({
     const smallestSelected = ref(false)
 
     /**
-     * 是否选了最小的成牌
+     * 是否选了成牌
      */
     const toggleSmallest = () => {
-      smallestSelected.value = !smallestSelected.value
       if (smallestSelected.value) {
-        pairSelected.value = []
-        countSelected.value = []
-        sameSelected.value = []
-        extraSelected.value = []
-        superSelected.value = []
-        const mutexList = ['杠开', '清水']
-        for (const mutex of mutexList) {
-          const index = moziSelected.value.indexOf(mutex)
-          if (~index) {
-            moziSelected.value.splice(index, 1)
-          }
+        if (
+          !(
+            pairSelected.value.length ||
+            countSelected.value.length ||
+            sameSelected.value.length ||
+            extraSelected.value.length ||
+            moziSelected.value.length ||
+            superSelected.value.length
+          )
+        ) {
+          // 只要有成牌 就不可取消
+          smallestSelected.value = false
         }
+      } else {
+        smallestSelected.value = true
       }
     }
 
@@ -93,7 +106,11 @@ const CalculatorPage = defineComponent({
      * @param item 选中的项
      * @param mutex 互斥选项 默认 false，只解决本组互斥性
      */
-    const toggleSelected = (list: Ref<(string | number)[]>, item: string | number, mutex: boolean = false) => {
+    const toggleSelected = (
+      list: Ref<(string | number)[]>,
+      item: string | number,
+      mutex: boolean = false
+    ) => {
       const index = list.value.indexOf(item)
       if (index > -1) {
         list.value.splice(index, 1)
@@ -105,6 +122,17 @@ const CalculatorPage = defineComponent({
         }
         // 选中后校验和其它已选项之间的互斥性
         checkMutex(list, item)
+      }
+      // 自动选择成牌
+      if (!smallestSelected.value) {
+        if (pairSelected.value.length ||
+          countSelected.value.length ||
+          sameSelected.value.length ||
+          extraSelected.value.length ||
+          moziSelected.value.length ||
+          superSelected.value.length) {
+            smallestSelected.value = true
+          }
       }
     }
 
@@ -118,7 +146,7 @@ const CalculatorPage = defineComponent({
     const checkMutex = (list: Ref<(string | number)[]>, item: string | number) => {
       // 如果已选择杂牌
       if (smallestSelected.value) {
-        if (list !== moziSelected || (['杠开', '清水'].includes(item as string))) {
+        if (list !== moziSelected || ['杠开', '清水'].includes(item as string)) {
           smallestSelected.value = false
         }
       }
@@ -170,7 +198,7 @@ const CalculatorPage = defineComponent({
         isSuper = true
       }
       let score = []
-      // 杂牌
+      // 成牌
       if (smallestSelected.value) {
         score.push(5)
       }
@@ -180,7 +208,7 @@ const CalculatorPage = defineComponent({
       }
       // 只子
       if (countSelected.value.length) {
-        score.push(countSelected.value[0] - 2)
+        score.push(countSelected.value[0] - 7)
       }
       // 通
       if (sameSelected.value.length) {
@@ -223,7 +251,7 @@ const CalculatorPage = defineComponent({
       return { isSuper, score, mozi, times }
     }
 
-    const calcArray = (arr: number[]) => arr.reduce<number>((count, item) => count += item, 0)
+    const calcArray = (arr: number[]) => arr.reduce<number>((count, item) => (count += item), 0)
 
     const scoreText = computed(() => {
       let scoreTxt = ''
@@ -240,7 +268,9 @@ const CalculatorPage = defineComponent({
           if (scoreCount >= 50) {
             scoreTxt = '大拿'
           } else {
-            scoreTxt = `${times.length ? `${times.join(' * ')} * (` : ''}${score.join(' + ')}${times.length ? ')' : ''} = ${scoreCount}`
+            scoreTxt = `${times.length ? `${times.join(' * ')} * (` : ''}${score.join(' + ')}${
+              times.length ? ')' : ''
+            } = ${scoreCount}`
           }
         }
         if (mozi.length) {
@@ -261,10 +291,12 @@ const CalculatorPage = defineComponent({
       }
       const scoreDom = <div class="text-lg">{scoreTxt}</div>
       if (mozi.length) {
-        return <div>
-          {scoreDom}
-          <div class="text-sm">{moziTxt}</div>
-        </div>
+        return (
+          <div>
+            {scoreDom}
+            <div class="text-sm">{moziTxt}</div>
+          </div>
+        )
       }
       return scoreDom
     })
@@ -285,13 +317,20 @@ const CalculatorPage = defineComponent({
               {convertNumberToChinese(pair)}对
             </CalcItem>
           ))}
-          <CalcItem class="bg-purple-100 border-purple-200" selected={smallestSelected.value} onClick={toggleSmallest}>杂牌</CalcItem>
+          <CalcItem
+            class="bg-purple-100 border-purple-200"
+            selected={smallestSelected.value}
+            point={5}
+            onClick={toggleSmallest}
+          >
+            成牌
+          </CalcItem>
         </CalcGroup>
         <CalcGroup title="只子数">
           {countList.map(count => (
             <CalcItem
               key={count}
-              point={count - 2}
+              point={count - 7}
               selected={countSelected.value.includes(count)}
               onClick={() => toggleSelected(countSelected, count, true)}
             >

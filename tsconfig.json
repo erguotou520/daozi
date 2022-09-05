@@ -12,7 +12,7 @@
     "isolatedModules": true,
     "esModuleInterop": true,
     "lib": ["esnext", "dom"],
-    "types": ["vite-plugin-pages/client"],
+    "types": ["vite-plugin-pages/client", "vite-plugin-pwa/client"],
     "paths": {
       "@/*": ["./src/*"]
     }
