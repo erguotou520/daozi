@@ -35,7 +35,7 @@ const superList = [
   '清一色',
   '双杠',
   '三杠',
-  '三大坎',
+  '三大坎+同门2张',
   '乱分'
 ]
 
@@ -58,6 +58,12 @@ const extraScoreMap = {
   七对: 31,
   大吊车: 31,
   老小对: 5
+} as const
+
+// 摸子点子数
+const moziScoreMap = {
+  枯只压: 21,
+  杠开: 5
 } as const
 
 const CalculatorPage = defineComponent({
@@ -200,7 +206,7 @@ const CalculatorPage = defineComponent({
       let score = []
       // 成牌
       if (smallestSelected.value) {
-        score.push(5)
+        score.push(4)
       }
       // 对子
       if (pairSelected.value.length) {
@@ -220,13 +226,15 @@ const CalculatorPage = defineComponent({
           score.push(extraScoreMap[item as keyof typeof extraScoreMap])
         }
       }
-      // 加倍
+      // 点数加倍
       const times: number[] = []
       // 加摸子
       const mozi: number[] = []
+      // 摸子加倍
+      const moziTimes: number[] = []
       if (moziSelected.value.length) {
         if (moziSelected.value.includes('枯只压')) {
-          score.push(20)
+          score.push(21)
           mozi.push(0.5)
         }
         if (moziSelected.value.includes('三打一')) {
@@ -241,14 +249,16 @@ const CalculatorPage = defineComponent({
           mozi.push(1)
         }
         if (moziSelected.value.includes('杠开')) {
+          score.push(5)
           times.push(2)
           mozi.push(1)
+          moziTimes.push(2)
         }
         if (moziSelected.value.includes('清水')) {
           mozi.push(1.5)
         }
       }
-      return { isSuper, score, mozi, times }
+      return { isSuper, score, mozi, times, moziTimes }
     }
 
     const calcArray = (arr: number[]) => arr.reduce<number>((count, item) => (count += item), 0)
@@ -256,7 +266,7 @@ const CalculatorPage = defineComponent({
     const scoreText = computed(() => {
       let scoreTxt = ''
       let moziTxt = ''
-      const { isSuper, score, mozi, times } = calcScore()
+      const { isSuper, score, mozi, times, moziTimes } = calcScore()
       if (isSuper) {
         scoreTxt = '大拿'
       } else {
@@ -274,7 +284,7 @@ const CalculatorPage = defineComponent({
           }
         }
         if (mozi.length) {
-          const moziCount = calcArray(mozi)
+          const moziCount = (calcArray(moziTimes) || 1) * calcArray(mozi)
           // 大摸子
           const bigMozi = Math.floor(moziCount)
           // 小摸子
@@ -320,7 +330,7 @@ const CalculatorPage = defineComponent({
           <CalcItem
             class="bg-purple-100 border-purple-200"
             selected={smallestSelected.value}
-            point={5}
+            point={4}
             onClick={toggleSmallest}
           >
             成牌
@@ -366,6 +376,7 @@ const CalculatorPage = defineComponent({
           {moziList.map(mozi => (
             <CalcItem
               key={mozi}
+              point={moziScoreMap[mozi as keyof typeof moziScoreMap]}
               selected={moziSelected.value.includes(mozi)}
               onClick={() => toggleSelected(moziSelected, mozi)}
             >

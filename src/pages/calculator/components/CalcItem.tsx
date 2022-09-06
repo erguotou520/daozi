@@ -18,7 +18,7 @@ const CalcItem = defineComponent({
       <div class="p-1px w-1/5">
         <div
           class={[
-            'relative h-10 flex items-center justify-center border-1px border-solid text-sm select-none',
+            'relative h-10 flex items-center justify-center border-1px border-solid text-sm select-none text-center',
             props.selected ? '!bg-green-500 !text-white !border-green-700' : 'bg-gray-200 text-title border-border',
             ctx.attrs['class']
           ]}
