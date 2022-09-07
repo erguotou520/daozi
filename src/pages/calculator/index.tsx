@@ -1,17 +1,21 @@
+import { ActionSheet } from '@/components'
 import { useTitle } from '@/hooks'
 import { convertNumberToChinese, omitArray } from '@/utils'
 import { computed, defineComponent, Ref, ref } from 'vue'
 import CalcGroup from './components/CalcGroup'
 import CalcItem from './components/CalcItem'
 
+// TODO 单吊
+
 // 对子数
 const pairList = [1, 2, 3, 4]
 // 只子数
-const countList = [8, 9, 10, 11, 12, 13, 14]
+const countList = [8, 9, 10, 11, 12]
 // 连通数
 const sameList = [5, 6, 7, 8]
 // 额外加分
 const extraList = [
+  '压裆',
   '小连号',
   '大连号',
   '棒棒',
@@ -48,6 +52,7 @@ const mutexedExtra = [
 
 // 单独点子数
 const extraScoreMap = {
+  压裆: 1,
   小连号: 5,
   大连号: 20,
   棒棒: 5,
@@ -70,6 +75,7 @@ const CalculatorPage = defineComponent({
   name: 'CalculatorPage',
   setup(props, ctx) {
     useTitle('计算器')
+    const playerVisible = ref(false)
     // const timesArray = ref<number[]>([])
     // const valueArray = ref<number[]>([])
     // // 摸子 小摸子算0.5 大摸子算1
@@ -150,7 +156,7 @@ const CalculatorPage = defineComponent({
      * @param item 选中的项
      */
     const checkMutex = (list: Ref<(string | number)[]>, item: string | number) => {
-      // 如果已选择杂牌
+      // 如果已选择成拍
       if (smallestSelected.value) {
         if (list !== moziSelected || ['杠开', '清水'].includes(item as string)) {
           smallestSelected.value = false
@@ -235,7 +241,7 @@ const CalculatorPage = defineComponent({
       if (moziSelected.value.length) {
         if (moziSelected.value.includes('枯只压')) {
           score.push(21)
-          mozi.push(0.5)
+          mozi.push(1)
         }
         if (moziSelected.value.includes('三打一')) {
           mozi.push(0.5)
@@ -311,10 +317,21 @@ const CalculatorPage = defineComponent({
       return scoreDom
     })
 
+    const save = () => {
+      playerVisible.value = true
+    }
+
     return () => (
       <div>
+        <ActionSheet v-model:visible={playerVisible.value} items={[
+          { title: '玩家1', key: 'player1' },
+          { title: '玩家2', key: 'player2' },
+          { title: '玩家3', key: 'player3' },
+          { title: '玩家4', key: 'player4' },
+        ]} onConfirm={console.log} />
         <div class="flex bg-[#535455] bg-opacity-75 h-12 text-white px-4 items-center relative">
           {scoreText.value}
+          {smallestSelected.value && <button class="rounded bg-green-500 border-green-700 text-white text-sm py-1 px-2 top-2.5 right-2 absolute" onClick={save}>保存点子</button>}
         </div>
         <CalcGroup title="对子数">
           {pairList.map(pair => (
