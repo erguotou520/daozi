@@ -1,0 +1,300 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>倒子麻将 · AI 对局原型</title>
+<style>
+:root{--bg:#0c1715;--felt:#174d3d;--felt2:#20644d;--gold:#e8c77b;--ink:#17221f;--panel:#142522;--line:#315248;--muted:#a7beb4;--white:#f7f4e9;--red:#a52e2e}
+*{box-sizing:border-box}body{margin:0;background:radial-gradient(ellipse at top,#1b342d,#0b1211 72%);color:var(--white);font-family:system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;min-height:100vh}
+header{display:flex;justify-content:space-between;align-items:center;padding:16px 22px;border-bottom:1px solid #ffffff16;gap:12px;flex-wrap:wrap}h1{font-size:20px;margin:0;letter-spacing:2px}header small{color:var(--muted)}button,select{font:inherit;border:1px solid #54776a;background:#203b32;color:var(--white);border-radius:9px;padding:9px 13px;cursor:pointer}button:hover{filter:brightness(1.15)}button.primary{background:var(--gold);color:#222b22;border-color:var(--gold);font-weight:700}button:disabled{opacity:.4;cursor:not-allowed}.layout{max-width:1420px;margin:auto;padding:16px;display:grid;grid-template-columns:minmax(0,1fr) 310px;gap:16px}.table{background:linear-gradient(135deg,#28765c 0%,#15503e 52%,#103c30 100%);border:10px solid #60472d;border-radius:30px;min-height:660px;position:relative;box-shadow:0 24px 0 #2b2118,0 32px 65px #0009,inset 0 0 0 3px #e5cb8655,inset 0 0 35px #061c15aa;padding:14px;overflow:hidden;transform:perspective(1100px) rotateX(1.5deg)}.table:before{content:"";position:absolute;inset:14px;border:2px solid #d4b86a55;border-radius:23px;pointer-events:none;box-shadow:inset 0 0 30px #071c1566}.seat{z-index:1}.center{z-index:2;backdrop-filter:blur(6px);box-shadow:0 12px 0 #08271f88,0 18px 35px #0005,inset 0 1px #ffffff20}.tile{box-shadow:0 3px 0 #9e998c,0 5px 8px #0002;transform:translateY(-1px)}.tile.back{box-shadow:0 3px 0 #674b24,0 5px 8px #0003}.tile.click:hover{transform:translateY(-9px) rotateX(5deg)}.center{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:250px;text-align:center;background:#0b2d25b8;border:1px solid #d6c18b55;border-radius:18px;padding:16px 12px;box-shadow:0 8px 30px #0003}.center .logo{font-size:25px;color:var(--gold);letter-spacing:6px}.center p{font-size:12px;color:#d3e1d8;margin:7px 0}.seat{position:absolute;max-width:90%;text-align:center}.seat.top{top:12px;left:50%;transform:translateX(-50%)}.seat.left{left:12px;top:50%;transform:translateY(-50%)}.seat.right{right:12px;top:50%;transform:translateY(-50%)}.seat.bottom{bottom:12px;left:50%;transform:translateX(-50%);width:95%}.player{font-size:13px;color:#d6e8df;background:#102d25b8;border:1px solid #ffffff25;border-radius:12px;padding:7px 10px;display:inline-block;margin-bottom:7px}.player.active{border-color:var(--gold);box-shadow:0 0 0 2px #e8c77b33}.player b{color:var(--gold)}.mini-hand{display:flex;justify-content:center;gap:2px;flex-wrap:nowrap;max-width:none;margin:auto}.mini-hand .tile{width:21px;height:30px;flex:0 0 auto}.mini-hand .tile .n{font-size:11px}.mini-hand .tile .s{font-size:7px}.seat.left .mini-hand,.seat.right .mini-hand{flex-direction:column;align-items:center;gap:1px}.seat.left .mini-hand .tile,.seat.right .mini-hand .tile{width:25px;height:18px;flex-direction:row;gap:2px}.seat.left .mini-hand .tile .n,.seat.right .mini-hand .tile .n{font-size:9px}.seat.left .mini-hand .tile .s,.seat.right .mini-hand .tile .s{font-size:6px;margin:0}.seat.left .discard-row,.seat.right .discard-row{max-width:90px;flex-wrap:wrap}.seat.top .discard-row{max-width:380px}.tile{display:inline-flex;flex-direction:column;align-items:center;justify-content:center;width:32px;height:43px;border-radius:5px;background:linear-gradient(150deg,#fffdf4,#ded9c9);color:#23372d;border:1px solid #b7b09f;box-shadow:0 2px 0 #9e998c;user-select:none;line-height:1}.tile .n{font-size:17px;font-weight:800}.tile .s{font-size:9px;margin-top:3px}.tile.red{color:#b22b27}.tile.green{color:#1e7752}.tile.blue{color:#345c9d}.tile.back{background:linear-gradient(145deg,#d8c48d,#8d6d38);color:#5b4525;border-color:#eadba7}.tile.click{cursor:pointer;transition:transform .12s}.tile.click:hover{transform:translateY(-7px)}.tile.selected{transform:translateY(-8px);outline:2px solid var(--gold)}.bottom-hand{display:flex;justify-content:center;gap:3px;flex-wrap:wrap;min-height:49px}.bottom-hand .tile{width:35px;height:48px}.side{display:flex;flex-direction:column;gap:12px}.panel{background:#12211f;border:1px solid var(--line);border-radius:14px;padding:14px}.panel h3{font-size:14px;margin:0 0 10px;color:var(--gold);letter-spacing:1px}.status{font-size:13px;color:#d9e7df;line-height:1.7}.muted{color:var(--muted)}.controls{display:flex;gap:7px;flex-wrap:wrap}.controls button{font-size:12px;padding:8px 10px}.log{height:185px;overflow:auto;font-size:12px;color:#c2d5cb;line-height:1.7}.log div{border-bottom:1px solid #ffffff0b;padding:3px 0}.pill{display:inline-block;border:1px solid #668276;border-radius:20px;padding:2px 7px;font-size:11px;margin:2px;color:#d9e8df}.pill.gold{border-color:var(--gold);color:var(--gold)}.discard-row{display:flex;justify-content:center;gap:3px;flex-wrap:wrap;min-height:28px}.discard-row .tile{width:25px;height:32px}.discard-row .n{font-size:12px}.discard-row .s{font-size:8px}.hint{font-size:12px;color:#c5d8cd;line-height:1.65}.scoregrid{display:grid;grid-template-columns:1fr auto;gap:5px;font-size:12px}.scoregrid span:nth-child(even){color:var(--gold);text-align:right}.overlay{position:absolute;inset:0;background:#07100ed9;display:flex;align-items:center;justify-content:center;padding:20px;z-index:5}.modal{width:min(560px,100%);background:#142622;border:1px solid #7d9c8a;border-radius:18px;padding:22px;box-shadow:0 20px 60px #0008}.modal h2{margin:0 0 10px;color:var(--gold)}.modal p{color:#d4e3da;font-size:14px;line-height:1.7}.suitopts{display:flex;gap:9px;flex-wrap:wrap;margin:14px 0}.suitopts button{min-width:90px}.warning{font-size:11px;color:#b6c9bf;margin-top:8px}.wall{position:absolute;z-index:0;display:flex;gap:1px;opacity:.96;pointer-events:none}.wall .stack{width:12px;height:19px;position:relative;flex:0 0 auto}.wall .stack:before,.wall .stack:after{content:"";position:absolute;left:0;width:11px;height:7px;border-radius:2px;border:1px solid #e8d7a1;background:linear-gradient(145deg,#d8c48d,#8d6d38);box-shadow:0 1px 0 #604622}.wall .stack:before{top:1px}.wall .stack:after{top:9px}.wall-top{top:78px;left:50%;transform:translateX(-50%);max-width:55%;overflow:hidden;flex-wrap:wrap;justify-content:center}.wall-bottom{bottom:86px;left:50%;transform:translateX(-50%);max-width:55%;overflow:hidden;flex-wrap:wrap;justify-content:center}.wall-left,.wall-right{top:50%;transform:translateY(-50%);flex-direction:column;max-height:48%;overflow:hidden}.wall-left{left:7px}.wall-right{right:7px}.wall-left .stack,.wall-right .stack{height:12px;width:19px}.wall-left .stack:before,.wall-left .stack:after,.wall-right .stack:before,.wall-right .stack:after{width:7px;height:11px;top:0}.wall-left .stack:after,.wall-right .stack:after{left:9px;top:0}.deal-pop{animation:dealPop .24s ease-out}@keyframes dealPop{0%{opacity:.45;filter:brightness(1.45)}100%{opacity:1;filter:brightness(1)}}.discard-pop{display:inline-block;animation:discardPop .3s ease-out}@keyframes discardPop{0%{transform:translateY(-22px) scale(1.1);opacity:.25}100%{transform:translateY(0) scale(1);opacity:1}}.dice-cube{display:inline-block;padding:5px 10px;border-radius:8px;background:#f7f1dc;color:#25372c;font-weight:900;font-size:18px;margin:0 3px;box-shadow:0 3px 0 #8d784e}
+@media(max-width:980px){.layout{grid-template-columns:1fr}.table{min-height:690px}.side{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}.side .panel:first-child{grid-column:1/-1}}@media(max-width:600px){header{padding:12px}.layout{padding:8px}.table{min-height:720px;padding:7px;border-width:5px}.seat.top{top:8px}.seat.left{left:5px;top:36%;transform:none}.seat.right{right:5px;top:36%;transform:none}.center{top:53%;width:190px;padding:12px 7px}.center .logo{font-size:20px}.seat.bottom{bottom:8px}.tile{width:27px;height:38px}.tile .n{font-size:14px}.bottom-hand .tile{width:28px;height:42px}.bottom-hand{gap:2px}.side{grid-template-columns:1fr}.side .panel:first-child{grid-column:auto}.mini-hand{max-width:none}.seat.left .mini-hand,.seat.right .mini-hand{max-height:230px;overflow:hidden}.seat.left .discard-row,.seat.right .discard-row{max-width:58px}.log{height:140px}}
+
+/* 2.5D table layout: larger tiles, concentric wall, discards and edge hands */
+.table{min-height:900px;transform:perspective(1400px) rotateX(1deg);padding:0;}
+.seat{max-width:none;z-index:2;display:flex;align-items:center;gap:8px;text-align:center;}
+.seat.top{top:18px;left:50%;transform:translateX(-50%);width:min(94%,900px);flex-direction:column;}
+.seat.bottom{bottom:18px;left:50%;transform:translateX(-50%);width:98%;flex-direction:column;}
+.seat.left{left:16px;top:50%;transform:translateY(-50%);height:80%;width:180px;flex-direction:row;justify-content:flex-start;}
+.seat.right{right:16px;top:50%;transform:translateY(-50%);height:80%;width:180px;flex-direction:row-reverse;justify-content:flex-start;}
+.player{margin:0;flex:0 0 auto;min-width:84px;}
+.seat.top .player,.seat.bottom .player{padding:5px 10px;}
+.seat-zone{display:flex;align-items:center;justify-content:center;gap:7px;min-width:0;}
+.seat.top .seat-zone,.seat.bottom .seat-zone{width:100%;flex-direction:column;}
+.hand-meld-row{display:flex;align-items:center;justify-content:center;gap:8px;max-width:100%;}
+.seat.bottom .hand-meld-row{align-items:flex-end;}
+.seat.bottom .meld-rack{align-self:flex-end;}
+.seat.left .seat-zone,.seat.right .seat-zone{height:100%;flex-direction:row;}
+.hand-zone{display:flex;align-items:center;justify-content:center;min-width:0;}
+.mini-hand{gap:2px;flex-wrap:wrap;justify-content:center;max-width:100%;}
+.seat.top .mini-hand,.seat.bottom .mini-hand{max-width:calc(14 * 40px);}
+.tile{width:40px;height:54px;border-radius:6px;box-shadow:0 4px 0 #9e998c,0 6px 10px #0003;}
+.tile .n{font-size:21px}.tile .s{font-size:10px;margin-top:3px}
+.bottom-hand{gap:4px;flex-wrap:nowrap;max-width:100%;}
+.bottom-hand .tile{width:43px;height:61px;flex:0 0 auto;}
+.bottom-hand .tile .n{font-size:23px}.bottom-hand .tile .s{font-size:11px}
+.seat.left .mini-hand,.seat.right .mini-hand{flex-direction:column;flex-wrap:nowrap;align-items:center;gap:2px;max-height:calc(14 * 37px);overflow:visible;}
+.seat.left .mini-hand .tile,.seat.right .mini-hand .tile{width:36px;height:43px;flex-direction:column;gap:0;}
+.seat.left .mini-hand .tile .n,.seat.right .mini-hand .tile .n{font-size:17px}
+.seat.left .mini-hand .tile .s,.seat.right .mini-hand .tile .s{font-size:8px;margin-top:2px}
+.discard-row{display:grid;grid-template-columns:repeat(14, minmax(0, 1fr));gap:2px;min-height:0;align-content:start;justify-content:center;}
+.discard-row .tile{width:100%;height:39px;min-width:0;box-shadow:0 2px 0 #9e998c;font-size:12px;}
+.discard-row .n{font-size:14px}.discard-row .s{font-size:8px}
+.seat.top .discard-row,.seat.bottom .discard-row{width:min(100%, 14 * 39px);max-width:560px;grid-template-columns:repeat(14, 1fr);}
+.seat.left .discard-row,.seat.right .discard-row{display:grid;grid-template-columns:repeat(1, 31px);grid-auto-flow:column;grid-template-rows:repeat(14, 35px);gap:2px;max-width:none;max-height:490px;overflow:hidden;}
+.seat.left .discard-row .tile,.seat.right .discard-row .tile{width:31px;height:35px;}
+.meld-rack{display:flex;gap:4px;align-items:center;justify-content:center;flex-wrap:wrap;max-width:100%;}
+.meld{display:flex;gap:1px;padding:2px;border:1px solid #e8c77b99;border-radius:5px;background:#08281f99;}
+.meld .tile{width:29px;height:38px;box-shadow:0 2px 0 #9e998c;}
+.meld .tile .n{font-size:14px}.meld .tile .s{font-size:7px}
+.seat.left .meld-rack,.seat.right .meld-rack{flex-direction:column;max-height:250px;overflow:hidden;}
+.wall{z-index:1;opacity:1;gap:2px;filter:drop-shadow(0 3px 3px #0005);}
+.wall .stack{width:17px;height:27px;}
+.wall .stack:before,.wall .stack:after{width:16px;height:11px;border-radius:3px;}
+.wall .stack:before{top:1px}.wall .stack:after{top:13px}
+.wall .stack.single:after{display:none}
+.wall-top{top:31%;left:50%;transform:translateX(-50%);width:42%;max-width:none;max-height:50px;flex-wrap:wrap;justify-content:center;overflow:hidden;}
+.wall-bottom{bottom:31%;left:50%;transform:translateX(-50%);width:42%;max-width:none;max-height:50px;flex-wrap:wrap;justify-content:center;overflow:hidden;}
+.wall-left,.wall-right{top:50%;transform:translateY(-50%);height:34%;max-height:none;overflow:hidden;flex-direction:column;flex-wrap:wrap;align-content:center;}
+.wall-left{left:26%;}.wall-right{right:26%;}
+.wall-left .stack,.wall-right .stack{height:17px;width:27px;}
+.wall-left .stack:before,.wall-left .stack:after,.wall-right .stack:before,.wall-right .stack:after{width:12px;height:16px;top:0;}
+.wall-left .stack:after,.wall-right .stack:after{left:13px;top:0;}
+.center{width:210px;min-height:150px;padding:12px;background:#09251fd9;z-index:3;}
+.center .logo{font-size:23px}
+.win-result{position:absolute;z-index:8;left:50%;top:50%;transform:translate(-50%,-50%);width:min(560px,76%);max-height:72%;overflow:auto;padding:18px 22px;border:1px solid #f0d48b99;border-radius:18px;background:#081d19d9;backdrop-filter:blur(9px);box-shadow:0 15px 50px #0009;text-align:center;color:#fff8e7;}
+.win-result h2{margin:0 0 8px;color:var(--gold);font-size:22px}.win-result .calc{font-size:13px;line-height:1.8;text-align:left;margin:10px auto;max-width:450px}.win-result .controls{justify-content:center;margin-top:12px}
+#recentDiscards{display:none}
+.deal-pop{animation:dealPop .16s ease-out}
+@media(max-width:980px){.table{min-height:900px}.seat.left{left:5px;width:145px}.seat.right{right:5px;width:145px}.wall-left{left:23%}.wall-right{right:23%}.tile{width:35px;height:48px}.bottom-hand .tile{width:36px;height:52px}.seat.top .mini-hand,.seat.bottom .mini-hand{max-width:calc(14 * 36px)}}
+@media(max-width:600px){.table{min-height:860px;border-width:5px;border-radius:18px}.seat.top{top:10px;width:98%}.seat.bottom{bottom:10px;width:99%}.seat.left{left:2px;width:95px;height:78%;top:50%;}.seat.right{right:2px;width:95px;height:78%;top:50%;}.player{font-size:10px;min-width:65px;padding:4px 5px}.tile{width:26px;height:36px}.tile .n{font-size:14px}.tile .s{font-size:7px}.bottom-hand{gap:1px;flex-wrap:wrap;max-width:100%;}.bottom-hand .tile{width:23px;height:34px}.bottom-hand .tile .n{font-size:13px}.bottom-hand .tile .s{font-size:6px}.seat.top .mini-hand,.seat.bottom .mini-hand{max-width:calc(14 * 24px)}.seat.left .mini-hand,.seat.right .mini-hand{max-height:calc(14 * 26px)}.seat.left .mini-hand .tile,.seat.right .mini-hand .tile{width:24px;height:25px}.seat.left .mini-hand .tile .n,.seat.right .mini-hand .tile .n{font-size:11px}.seat.left .mini-hand .tile .s,.seat.right .mini-hand .tile .s{font-size:6px}.seat.top .discard-row,.seat.bottom .discard-row{grid-template-columns:repeat(14,minmax(0,1fr));max-width:calc(14 * 23px)}.discard-row .tile{height:25px}.discard-row .n{font-size:9px}.discard-row .s{font-size:6px}.seat.left .discard-row,.seat.right .discard-row{grid-template-columns:repeat(1,19px);grid-template-rows:repeat(14,22px);max-height:310px}.seat.left .discard-row .tile,.seat.right .discard-row .tile{width:19px;height:22px}.wall-top{top:34%;width:45%;}.wall-bottom{bottom:34%;width:45%;}.wall-left{left:21%}.wall-right{right:21%}.wall .stack{width:11px;height:18px}.wall .stack:before,.wall .stack:after{width:10px;height:7px}.wall .stack:after{top:9px}.wall .stack.single:after{display:none}.wall-left .stack,.wall-right .stack{height:11px;width:18px}.wall-left .stack:before,.wall-left .stack:after,.wall-right .stack:before,.wall-right .stack:after{width:8px;height:10px}.wall-left .stack:after,.wall-right .stack:after{left:9px}.center{width:145px;min-height:110px;padding:7px}.center .logo{font-size:16px;letter-spacing:3px}.center p{font-size:10px;margin:4px 0}.win-result{width:86%;padding:12px;max-height:70%}.meld .tile{width:18px;height:25px}.meld .tile .n{font-size:10px}.meld .tile .s{font-size:5px}}
+
+
+/* Stable table geometry: seat dimensions never depend on discard count. */
+.table{min-height:940px;transform:none;isolation:isolate;}
+.seat{z-index:2;min-width:0;}
+.seat.top{top:14px;left:50%;width:min(92%,900px);height:142px;transform:translateX(-50%);display:flex;flex-direction:column;justify-content:flex-start;gap:5px;}
+.seat.bottom{bottom:12px;left:50%;width:96%;height:142px;transform:translateX(-50%);display:flex;flex-direction:column;justify-content:flex-end;gap:5px;}
+.seat.left,.seat.right{top:50%;height:72%;width:112px;transform:translateY(-50%);display:flex;flex-direction:column;align-items:center;justify-content:flex-start;gap:5px;}
+.seat.left{left:8px}.seat.right{right:8px;flex-direction:column;}
+.player{margin:0 auto;min-width:0;width:max-content;max-width:100%;padding:4px 8px;line-height:1.35;font-size:12px;}
+.seat.left .player,.seat.right .player{order:0;align-self:center;white-space:nowrap;}
+.seat.left .seat-zone,.seat.right .seat-zone{height:auto;width:100%;flex-direction:column;justify-content:flex-start;gap:5px;}
+.seat.left .hand-zone,.seat.right .hand-zone{width:100%;}
+.seat.left .mini-hand,.seat.right .mini-hand{flex-direction:column;flex-wrap:nowrap;align-items:center;max-height:none;overflow:visible;gap:2px;}
+.seat.left .mini-hand .tile,.seat.right .mini-hand .tile{width:28px;height:36px;flex-direction:column;}
+.seat.left .mini-hand .tile .n,.seat.right .mini-hand .tile .n{font-size:14px}
+.seat.left .mini-hand .tile .s,.seat.right .mini-hand .tile .s{font-size:7px}
+.seat.left .meld-rack,.seat.right .meld-rack{flex-direction:row;max-height:none;max-width:100%;overflow:visible;}
+.seat.top .mini-hand,.seat.bottom .mini-hand{flex-wrap:nowrap;max-width:calc(14 * 35px);}
+.seat.top .mini-hand .tile,.seat.bottom .mini-hand .tile{width:31px;height:42px;}
+.seat.top .mini-hand .tile .n,.seat.bottom .mini-hand .tile .n{font-size:15px}
+.seat.top .mini-hand .tile .s,.seat.bottom .mini-hand .tile .s{font-size:7px}
+.seat.bottom .bottom-hand{flex-wrap:nowrap;gap:2px;min-height:61px;}
+.seat.bottom .bottom-hand .tile{width:clamp(24px,3.05vw,40px);height:55px;}
+.seat.bottom .bottom-hand .tile .n{font-size:clamp(13px,1.5vw,20px)}
+.seat.bottom .bottom-hand .tile .s{font-size:9px}
+/* Discards live in four fixed central lanes, never inside a seat's layout flow. */
+.center-discards{position:absolute;z-index:2;display:grid;gap:2px;align-content:start;justify-content:center;pointer-events:none;min-width:0;min-height:0;}
+.center-discards .tile{width:27px;height:34px;min-width:0;border-radius:4px;box-shadow:0 2px 0 #9e998c;font-size:11px;}
+.center-discards .tile .n{font-size:12px}.center-discards .tile .s{font-size:7px;margin-top:1px}
+.discard-top{top:31%;left:50%;transform:translateX(-50%);width:min(72%,560px);grid-template-columns:repeat(14,minmax(0,1fr));grid-auto-rows:34px;}
+.discard-bottom{bottom:31%;left:50%;transform:translateX(-50%);width:min(72%,560px);grid-template-columns:repeat(14,minmax(0,1fr));grid-auto-rows:34px;}
+.discard-left{left:24%;top:50%;transform:translateY(-50%);height:32%;grid-template-rows:repeat(14,24px);grid-auto-flow:column;grid-auto-columns:27px;}
+.discard-right{right:24%;top:50%;transform:translateY(-50%);height:32%;grid-template-rows:repeat(14,24px);grid-auto-flow:column;grid-auto-columns:27px;}
+.discard-left .tile,.discard-right .tile{width:27px;height:24px;flex-direction:row;gap:2px;}
+.discard-left .tile .n,.discard-right .tile .n{font-size:10px}.discard-left .tile .s,.discard-right .tile .s{font-size:6px;margin:0}
+/* Each wall is a single uninterrupted row/column of 17 two-level stacks. */
+.wall{flex-wrap:nowrap!important;overflow:visible!important;max-width:none!important;max-height:none!important;gap:1px;}
+.wall-top{top:25%;left:50%;transform:translateX(-50%);width:calc(17 * 17px);height:27px;}
+.wall-bottom{bottom:25%;left:50%;transform:translateX(-50%);width:calc(17 * 17px);height:27px;}
+.wall-left,.wall-right{top:50%;height:calc(17 * 17px);width:27px;transform:translateY(-50%);flex-direction:column;}
+.wall-left{left:17%}.wall-right{right:17%}
+.wall .stack{width:16px;height:27px;flex:0 0 16px;}
+.wall .stack:before,.wall .stack:after{left:0;width:15px;height:11px;}
+.wall .stack:before{top:1px}.wall .stack:after{top:13px;left:0}
+.wall .stack.no-top:before,.wall .stack.no-bottom:after{display:none}
+.wall .stack.no-top.has-bottom:after{top:1px}
+.wall-left .stack,.wall-right .stack{width:27px;height:16px;flex:0 0 16px;}
+.wall-left .stack:before,.wall-left .stack:after,.wall-right .stack:before,.wall-right .stack:after{width:12px;height:15px;top:0;left:0;}
+.wall-left .stack:after,.wall-right .stack:after{left:13px;top:0}
+.wall-left .stack.no-top:before,.wall-right .stack.no-top:before,.wall-left .stack.no-bottom:after,.wall-right .stack.no-bottom:after{display:none}
+.wall-left .stack.no-top.has-bottom:after,.wall-right .stack.no-top.has-bottom:after{left:0}
+/* Discards animate locally; seat/table never translate or resize on a play. */
+.seat.deal-pop{animation:none!important}
+.discard-pop{animation:discardPop .18s ease-out;}
+@media(max-width:980px){.table{min-height:940px}.seat.left,.seat.right{width:88px}.wall-left{left:15%}.wall-right{right:15%}.discard-left{left:20%}.discard-right{right:20%}.center-discards .tile{width:23px;height:30px}.discard-top,.discard-bottom{width:76%;grid-auto-rows:30px}.wall-top,.wall-bottom{width:calc(17 * 14px)}.wall .stack{width:13px;flex-basis:13px}.wall-left,.wall-right{height:calc(17 * 14px)}.wall-left .stack,.wall-right .stack{height:13px;flex-basis:13px}}
+@media(max-width:600px){.table{min-height:860px;transform:none}.seat.top{top:8px;height:110px;width:98%}.seat.bottom{bottom:8px;height:110px;width:99%}.seat.left,.seat.right{height:68%;width:62px;top:50%}.seat.left{left:2px}.seat.right{right:2px}.player{font-size:9px;padding:3px 4px}.seat.top .mini-hand,.seat.bottom .mini-hand{max-width:calc(14 * 23px)}.seat.top .mini-hand .tile,.seat.bottom .mini-hand .tile{width:21px;height:30px}.seat.bottom .bottom-hand{gap:1px;flex-wrap:nowrap;}.seat.bottom .bottom-hand .tile{width:clamp(18px,5.7vw,25px);height:35px;padding:0}.seat.bottom .bottom-hand .tile .n{font-size:12px}.seat.bottom .bottom-hand .tile .s{font-size:6px}.seat.left .mini-hand .tile,.seat.right .mini-hand .tile{width:19px;height:25px}.seat.left .mini-hand .tile .n,.seat.right .mini-hand .tile .n{font-size:10px}.seat.left .mini-hand .tile .s,.seat.right .mini-hand .tile .s{font-size:5px}.center{width:124px;min-height:100px;padding:6px;top:50%}.center .logo{font-size:15px;letter-spacing:2px}.center p{font-size:9px;margin:3px 0}.wall-top{top:24%;width:calc(17 * 10px);height:18px}.wall-bottom{bottom:24%;width:calc(17 * 10px);height:18px}.wall .stack{width:9px;height:18px;flex-basis:9px}.wall .stack:before,.wall .stack:after{width:8px;height:7px}.wall .stack:before{top:1px}.wall .stack:after{top:9px}.wall-left,.wall-right{height:calc(17 * 10px);width:18px}.wall-left{left:13%}.wall-right{right:13%}.wall-left .stack,.wall-right .stack{width:18px;height:9px;flex-basis:9px}.wall-left .stack:before,.wall-left .stack:after,.wall-right .stack:before,.wall-right .stack:after{width:8px;height:8px}.wall-left .stack:after,.wall-right .stack:after{left:9px}.discard-top{top:32%;width:76%}.discard-bottom{bottom:32%;width:76%}.discard-left{left:18%;height:30%;grid-template-rows:repeat(14,18px);grid-auto-columns:17px}.discard-right{right:18%;height:30%;grid-template-rows:repeat(14,18px);grid-auto-columns:17px}.center-discards .tile{width:17px;height:18px}.center-discards .tile .n{font-size:8px}.center-discards .tile .s{font-size:5px}.discard-top,.discard-bottom{grid-auto-rows:22px}.meld .tile{width:16px;height:22px}.meld .tile .n{font-size:9px}.meld .tile .s{font-size:5px}}
+
+</style>
+</head>
+<body>
+<header><div><h1>倒子麻将 <span style="color:var(--gold)">·</span> AI 对局原型</h1><small>单文件 HTML · 真人 1 位 + AI 3 位 · 启发式策略</small></div><div class="controls"><button id="newGame">重新开局</button></div></header>
+<div class="layout"><main class="table" id="table">
+ <div class="seat top" id="seat2"></div><div class="seat left" id="seat3"></div><div class="seat right" id="seat1"></div><div class="seat bottom" id="seat0"></div>
+ <div class="center-discards discard-top" id="discardZone2"></div><div class="center-discards discard-bottom" id="discardZone0"></div><div class="center-discards discard-left" id="discardZone3"></div><div class="center-discards discard-right" id="discardZone1"></div>
+ <div class="center"><div class="logo">倒 子</div><p id="roundText">第 1 把 · 等待开局</p><div id="diceText" style="font-size:13px;color:var(--gold)">骰子：—</div><p id="turnText">等待掷骰子</p><div id="claimActions" class="controls" style="justify-content:center;margin-top:8px"></div><p id="wallText">牌山：—</p></div><div id="winResult" class="win-result" style="display:none"></div>
+ <div class="wall wall-top" id="wall2"></div><div class="wall wall-bottom" id="wall0"></div><div class="wall wall-left" id="wall3"></div><div class="wall wall-right" id="wall1"></div><div class="overlay" id="overlay"><div class="modal" id="modalContent"><h2>准备掷骰子</h2><p>先掷两个骰子，确定东家与开牌位置。</p><div class="controls"><button class="primary" id="firstRoll">🎲 掷骰子</button></div></div></div>
+</main>
+<aside class="side">
+ <section class="panel"><h3>本局状态</h3><div class="status" id="status"></div><div style="margin-top:10px" class="controls"><button id="rollBtn" disabled>掷骰子 / 开始</button><button id="sortBtn" disabled>整理手牌</button><button id="hintBtn" disabled>AI 建议出牌</button></div></section>
+ <section class="panel"><h3>各家信息</h3><div class="scoregrid" id="scores"></div></section>
+ <section class="panel"><h3>最近动作</h3><div class="log" id="log"></div></section>
+ <section class="panel"><h3>AI 决策摘要</h3><div class="hint" id="aiHint">选择缺门并开局后显示。</div></section>
+</aside></div>
+<script>
+(()=>{
+const SUITS=['万','筒','条'], HONORS=['东','南','西','北','中','发','白'];
+const NAMES=['你','下家 AI','对家 AI','上家 AI'];
+let state=null, chosenSuit=null, selected=null, busy=false, dealTimer=null;
+const $=id=>document.getElementById(id);
+function tileKey(t){return t.suit==='字'?t.name:t.suit+t.n}
+function label(t){return t.suit==='字'?t.name:t.n+t.suit}
+function shuffle(a){for(let i=a.length-1;i>0;i--){let j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a}
+function makeDeck(){let d=[];for(const s of SUITS)for(let n=1;n<=9;n++)for(let i=0;i<4;i++)d.push({suit:s,n});for(const name of HONORS)for(let i=0;i<4;i++)d.push({suit:'字',name});return shuffle(d)}
+function sortHand(h){const order={'万':0,'筒':1,'条':2,'字':3};return h.sort((a,b)=>order[a.suit]-order[b.suit]||(a.suit==='字'?HONORS.indexOf(a.name)-HONORS.indexOf(b.name):a.n-b.n))}
+function log(msg){if(!state)return;state.logs.unshift(msg);state.logs=state.logs.slice(0,90);$('log').innerHTML=state.logs.map(x=>'<div>'+x+'</div>').join('')}
+function chooseAIShortage(hand){let counts=SUITS.map(s=>[s,hand.filter(t=>t.suit===s).length,hand.filter(t=>t.suit===s&&t.n>=2&&t.n<=8).length]);counts.sort((a,b)=>a[1]-b[1]||a[2]-b[2]);return counts[0][0]}
+function diceSeat(sum){return ((sum-5)%4+4)%4} // 5自己、6下家、7对面、8上家，之后循环
+function prepareHand(round=1, carryWins=null, roller=0){if(dealTimer)clearTimeout(dealTimer);$('winResult').style.display='none';chosenSuit=null;selected=null;busy=false;let players=[];for(let i=0;i<4;i++)players.push({name:NAMES[i],hand:[],shortage:null,discards:[],melds:[],points:50,won:carryWins?carryWins[i]:0,ai:i!==0});state={players,round,starter:-1,dealer:-1,diceRoller:roller,diceA:0,diceB:0,dice:0,wallSeat:-1,breakStacks:0,walls:[[],[],[],[]],wallVisual:Array.from({length:4},()=>Array.from({length:17},()=>[true,true])),wallOrder:[],turn:0,phase:'await-dice',logs:[],ended:false,drawCount:0,opening:true,lastDiscard:null,claimTile:null,claimFrom:-1,handEndReason:'',recent:[],drawnTile:null};$('rollBtn').disabled=false;$('rollBtn').textContent='掷骰子';$('sortBtn').disabled=true;$('hintBtn').disabled=true;$('claimActions').innerHTML='';$('overlay').style.display='flex';$('modalContent').innerHTML=`<h2>掷骰子，确定东家</h2><p>本把先掷两个骰子。点数按 5=自己、6=下家、7=对面、8=上家循环确定东家；随后按骰子点数确定开牌墙。</p><div class="controls"><button class="primary" id="firstRoll">🎲 掷两个骰子</button></div>`;$('firstRoll').onclick=rollDiceAndDeal;render();}
+function tileColor(t){if(t.suit==='字')return ['中','白','西','北'].includes(t.name)?'red':(['发','东'].includes(t.name)?'green':'blue');return t.suit==='万'?'red':t.suit==='筒'?'blue':'green'}
+function tileHTML(t,clickable=false,idx=-1){return `<div class="tile ${tileColor(t)} ${clickable?'click':''} ${selected===idx?'selected':''}" ${clickable?`data-idx="${idx}"`:''}><span class="n">${t.suit==='字'?t.name:t.n}</span><span class="s">${t.suit==='字'?'字':t.suit}</span></div>`}
+function renderWalls(){for(let i=0;i<4;i++){let el=$('wall'+i);if(!el)continue;let left=(state.walls[i]||[]).length;let slots=state.wallVisual?.[i]||Array.from({length:17},()=>[true,true]);el.innerHTML=slots.map(([top,bottom])=>`<span class="stack ${top?'has-top':'no-top'} ${bottom?'has-bottom':'no-bottom'}"></span>`).join('');el.title=`${state.players[i].name}门前剩余 ${left} 张（${Math.ceil(left/2)} 墩）`;}}
+function render(){if(!state)return;
+ for(let i=0;i<4;i++){
+  let p=state.players[i],seat=$('seat'+i),active=i===state.turn&&!state.ended;
+  let info=`<div class="player ${active?'active':''}"><b>${p.name}${i===state.dealer?' · 东家':''}</b><br>${p.shortage?'缺'+p.shortage:'待选缺门'} · ${p.hand.length}张</div>`;
+  let hand='';
+  if(i===0){sortHand(p.hand);hand='<div class="bottom-hand">'+p.hand.map((t,j)=>tileHTML(t,state.turn===0&&!state.ended&&state.phase==='discard',j)).join('')+'</div>'}
+  else if(state.revealedWinner===i){hand='<div class="mini-hand">'+p.hand.map(t=>tileHTML(t)).join('')+'</div>'}
+  else{hand='<div class="mini-hand">'+Array.from({length:p.hand.length},()=>'<div class="tile back"><span class="n">◆</span><span class="s">倒</span></div>').join('')+'</div>'}
+  let melds=p.melds.map(m=>`<div class="meld" title="${m.type}">${m.tiles.map(t=>tileHTML(t)).join('')}</div>`).join('');
+  if(i===0){seat.innerHTML=info+`<div class="seat-zone"><div class="hand-meld-row"><div class="hand-zone">${hand}</div><div class="meld-rack">${melds}</div></div></div>`}
+  else if(i===2){seat.innerHTML=info+`<div class="seat-zone"><div class="hand-meld-row"><div class="hand-zone">${hand}</div><div class="meld-rack">${melds}</div></div></div>`}
+  else{seat.innerHTML=info+`<div class="seat-zone"><div class="hand-zone">${hand}</div><div class="meld-rack">${melds}</div></div>`}
+  const dz=$('discardZone'+i); if(dz) dz.innerHTML=p.discards.map((t,j)=>`<span class="${j===p.discards.length-1?'discard-pop':''}">${tileHTML(t)}</span>`).join('');
+ }
+ $('roundText').textContent=`第 ${state.round} 把 · ${state.ended?'本把结束':`剩余 ${state.walls.reduce((n,w)=>n+w.length,0)} 张`}`;
+ $('diceText').innerHTML=state.dice?`骰子：<span class="dice-cube">${state.diceA}</span> + <span class="dice-cube">${state.diceB}</span> = <b>${state.dice}</b>`:'骰子：—';
+ $('turnText').textContent=state.ended?'本把已结束':state.phase==='await-dice'?'等待掷骰子':state.phase==='dealing'?'正在发牌…':state.phase==='choose-suit'?'发牌完成，请选择缺门':state.turn===0?'轮到你：'+(state.phase==='discard'?'请选择一张打出':state.phase==='need-draw'?'点击摸牌':'处理操作提示'):`轮到${state.players[state.turn].name}`;
+ $('wallText').textContent=`牌山：${state.walls.reduce((n,w)=>n+w.length,0)} 张 · 开牌墙：${state.wallSeat>=0?state.players[state.wallSeat].name:'未确定'} · 留 ${state.breakStacks} 墩`;
+ $('status').innerHTML=`<span class="pill gold">${state.ended?'已结束':state.phase==='await-dice'?'等待掷骰子':state.phase==='dealing'?'发牌中':state.phase==='choose-suit'?'选择缺门':'进行中'}</span><span class="pill">东家：${state.dealer>=0?state.players[state.dealer].name:'待定'}</span><span class="pill">你的缺门：${chosenSuit||'未选择'}</span><div style="margin-top:8px">${state.ended?state.handEndReason:state.phase==='discard'?'选择手牌打出。':state.phase==='need-draw'&&state.turn===0?'点击“摸牌”继续。':'牌局按回合自动推进。'}</div>`;
+ $('rollBtn').textContent=state.phase==='await-dice'?'掷骰子':state.phase==='need-draw'&&state.turn===0?'摸牌':state.phase==='discard'?'等待出牌':state.ended?'本把结束':'进行中';
+ $('rollBtn').disabled=state.phase!=='await-dice'&&!(state.phase==='need-draw'&&state.turn===0&&!state.ended);
+ $('sortBtn').disabled=!state.players[0].hand.length;$('hintBtn').disabled=!(state.turn===0&&state.phase==='discard'&&!state.ended);
+ $('scores').innerHTML=state.players.map(p=>`<span>${p.name}${p.ai?' AI':''}</span><span>${p.points} 点 / ${p.won>=0?'+':''}${p.won} 元</span>`).join('');
+ $('log').innerHTML=state.logs.map(x=>'<div>'+x+'</div>').join('');$('log').scrollTop=0;
+ document.querySelectorAll('[data-idx]').forEach(el=>el.addEventListener('click',()=>discardHuman(+el.dataset.idx)));
+ renderWalls();
+}
+function rollDiceAndDeal(){if(!state||state.phase!=='await-dice')return;state.diceA=1+Math.floor(Math.random()*6);state.diceB=1+Math.floor(Math.random()*6);state.dice=state.diceA+state.diceB;state.dealer=diceSeat(state.dice);state.turn=state.dealer;state.wallSeat=diceSeat(state.dice);state.breakStacks=Math.min(state.diceA,state.diceB);let deck=makeDeck();state.wallVisual=Array.from({length:4},()=>Array.from({length:17},()=>[true,true]));state.walls=[0,1,2,3].map(i=>{let raw=deck.slice(i*34,(i+1)*34);return raw.slice(0,17).map((tile,col)=>({tile,layer:0,col})).concat(raw.slice(17,34).map((tile,col)=>({tile,layer:1,col})))});
+// 开牌位置按较小骰子点数留墩；先取上层，再取下层，保留的墩放到队列末尾。
+let wall=state.walls[state.wallSeat],top=wall.filter(x=>x.layer===0),bottom=wall.filter(x=>x.layer===1),k=state.breakStacks;state.walls[state.wallSeat]=top.slice(k).concat(bottom.slice(k),top.slice(0,k),bottom.slice(0,k));state.wallOrder=[0,1,2,3].map(n=>(state.wallSeat+n)%4);state.phase='dealing';$('overlay').style.display='none';log(`掷骰子 ${state.diceA}+${state.diceB}=${state.dice}：${state.players[state.dealer].name} 为东家；从${state.players[state.wallSeat].name}门前开牌，先留 ${state.breakStacks} 堆（${state.breakStacks*2} 张）。`);render();dealTilesAnimated();}
+function takeWallTile(){for(let pass=0;pass<4;pass++){let oi=(state.wallOrderIndex||0)%4,idx=state.wallOrder[oi];if(state.walls[idx].length){let entry=state.walls[idx].shift();if(state.wallVisual?.[idx]?.[entry.col])state.wallVisual[idx][entry.col][entry.layer]=false;if(!state.walls[idx].length)state.wallOrderIndex=(oi+1)%4;else state.wallOrderIndex=oi;return entry.tile}state.wallOrderIndex=(oi+1)%4}return null}
+function dealTilesAnimated(){state.wallOrderIndex=0;let dealer=state.dealer;let order=[dealer,(dealer+1)%4,(dealer+2)%4,(dealer+3)%4];let tasks=[];for(let r=0;r<3;r++)for(let seat of order)for(let n=0;n<4;n++)tasks.push({seat});for(let seat of order)tasks.push({seat});tasks.push({seat:dealer});let ix=0;function next(){if(ix>=tasks.length){state.players.forEach(p=>sortHand(p.hand));state.phase='choose-suit';state.turn=dealer;state.players.forEach((p,i)=>{if(i!==0)p.shortage=chooseAIShortage(p.hand)});log('发牌完成：东家 14 张，其余每家 13 张。请根据自己的手牌选择缺门。');render();showSuitModal();return}let task=tasks[ix++],t=takeWallTile();if(!t){endHand('牌墙已空，发牌异常终止。');return}state.players[task.seat].hand.push(t);render();dealTimer=setTimeout(next,38)}next();}
+function showSuitModal(){let h=state.players[0].hand;$('overlay').style.display='flex';$('modalContent').innerHTML=`<h2>看完手牌，再选缺门</h2><p>通常选择数量较少、组合潜力较差的一门。</p><div class="bottom-hand" style="justify-content:flex-start;margin:12px 0;gap:3px;flex-wrap:wrap">${h.map(t=>tileHTML(t)).join('')}</div><b>选择本把缺门（整把不能更换）：</b><div class="suitopts"><button data-suit="万">缺万（${h.filter(t=>t.suit==='万').length} 张）</button><button data-suit="筒">缺筒（${h.filter(t=>t.suit==='筒').length} 张）</button><button data-suit="条">缺条（${h.filter(t=>t.suit==='条').length} 张）</button></div>`;document.querySelectorAll('[data-suit]').forEach(b=>b.onclick=()=>chooseHumanSuit(b.dataset.suit));}
+function chooseHumanSuit(suit){if(!state||state.phase!=='choose-suit')return;chosenSuit=suit;state.players[0].shortage=suit;state.phase='discard';state.turn=state.dealer;log(`你选择缺${suit}；AI 已根据各自手牌选择缺门。`);$('overlay').style.display='none';$('aiHint').textContent='AI 会按缺门约束、手牌潜力和出牌风险选择动作。';render();if(state.dealer===0){render();}else{runBots();}}
+function legalDiscards(p){let missing=p.hand.filter(t=>t.suit===p.shortage);return missing.length?missing:p.hand.slice()}
+function counts(hand){let c={};hand.forEach(t=>{let k=tileKey(t);c[k]=(c[k]||0)+1});return c}
+function visibleCount(t){let n=0;state.players.forEach(p=>{n+=p.discards.filter(x=>tileKey(x)===tileKey(t)).length;p.melds.forEach(m=>m.tiles.forEach(x=>{if(tileKey(x)===tileKey(t))n++}))});return n}
+function tileRisk(t,playerIndex){let risk=0;for(let i=0;i<4;i++){if(i===playerIndex)continue;let p=state.players[i];if(p.shortage===t.suit)continue;let same=p.discards.slice(-4).filter(x=>x.suit===t.suit).length;risk+=same*.018;if(t.suit!=='字'&&p.discards.some(x=>x.suit===t.suit&&Math.abs(x.n-t.n)<=1))risk+=.025;if(t.suit==='字'&&!p.discards.some(x=>tileKey(x)===tileKey(t)))risk+=.045}let seen=visibleCount(t);risk+=Math.max(0,.16-seen*.035);if(t.suit!=='字'&&state.players.some(p=>p.hand.length<=4&&p.shortage!==t.suit&&Math.abs((p.hand.find(x=>x.suit===t.suit)?.n||0)-t.n)<=2))risk+=.08;return Math.min(.8,risk)}
+function potential(hand,shortage){let h=hand.filter(t=>t.suit!==shortage),c=counts(h),score=0;for(const [k,n] of Object.entries(c)){score+=n>=4?5:n===3?3.3:n===2?1.65:.25;let t=h.find(x=>tileKey(x)===k);if(t&&t.suit!=='字'){if(h.some(x=>x.suit===t.suit&&Math.abs(x.n-t.n)===1))score+=.55;if(h.some(x=>x.suit===t.suit&&Math.abs(x.n-t.n)===2))score+=.25}}let suitCounts=SUITS.map(s=>h.filter(t=>t.suit===s).length);if(Math.max(...suitCounts)>=9)score+=2.2;if(suitCounts.some(n=>n>=7))score+=.7;let pairCount=Object.values(c).filter(n=>n>=2).length;if(pairCount>=4)score+=Math.min(3,pairCount*.45);return score}
+function scoreDiscard(p,idx){let t=p.hand[idx],rest=p.hand.filter((_,i)=>i!==idx);if(!legalDiscards(p).some(x=>tileKey(x)===tileKey(t)))return -1e6;let val=potential(rest,p.shortage),risk=tileRisk(t,state.players.indexOf(p)),duplicate=p.hand.filter(x=>tileKey(x)===tileKey(t)).length;if(duplicate>=3)val+=.3;if(t.suit!=='字'&&rest.some(x=>x.suit===t.suit&&Math.abs(x.n-t.n)<=2))val-=.5;if(t.suit==='字'&&duplicate===1)val+=.25;if(state.opening&&val<6)risk*=1.25;if(state.opening&&val>10)val+=.5;if(p.points>=32)val+=.35;if(state.players.some((q,i)=>i!==state.players.indexOf(p)&&q.points>=32))risk*=1.2;let c=counts(p.hand);if(Object.values(c).includes(3))risk*=.97;return val-risk*3.1}
+function bestDiscard(p){let legal=legalDiscards(p),choices=legal.map(t=>p.hand.findIndex(x=>tileKey(x)===tileKey(t)));let best=choices[0],bestV=-Infinity;for(let idx of choices){let v=scoreDiscard(p,idx);if(v>bestV){bestV=v;best=idx}}return {idx:best,value:bestV,tile:p.hand[best]}}
+function discardHuman(idx){if(!state||state.ended||state.turn!==0||state.phase!=='discard'||busy)return;let p=state.players[0],t=p.hand[idx];if(!legalDiscards(p).some(x=>tileKey(x)===tileKey(t))){log('你还有缺门牌，必须优先打出缺门牌。');render();return}doDiscard(0,idx)}
+function canWinApproxHand(hand,shortage){let h=hand.slice();if(h.some(t=>t.suit===shortage)||h.length%3!==2)return false;let c=counts(h);if(h.length===14&&Object.values(c).filter(n=>n===2).length===7)return true;function meldable(){let k=Object.keys(c).find(k=>c[k]>0);if(!k)return true;let t=h.find(x=>tileKey(x)===k);if(c[k]>=3){c[k]-=3;if(meldable())return true;c[k]+=3}if(t.suit!=='字'){for(let a of [t.n+1]){let k1=t.suit+a,k2=t.suit+(a+1);if(c[k1]>0&&c[k2]>0){c[k]--;c[k1]--;c[k2]--;if(meldable())return true;c[k]++;c[k1]++;c[k2]++}}}return false}for(let k of Object.keys(c)){if(c[k]>=2){c[k]-=2;if(meldable())return true;c[k]+=2}}return false}
+function canWinApprox(p){return canWinApproxHand(p.hand,p.shortage)}
+function claimOptions(p,t){if(!t||p.shortage===t.suit)return [];let same=p.hand.filter(x=>tileKey(x)===tileKey(t)).length,opts=[];if(canWinApproxHand([...p.hand,t],p.shortage))opts.push('成');if(same>=3)opts.push('杠');if(same>=2)opts.push('碰');return opts}
+function showClaimActions(pi,t,from){let opts=claimOptions(state.players[pi],t);if(pi!==0||!opts.length)return false;state.phase='claim';state.claimTile=t;state.claimFrom=from;$('claimActions').innerHTML=opts.map(o=>`<button class="primary" data-claim="${o}">${o}</button>`).join('')+'<button data-claim="过">过</button>';$('claimActions').querySelectorAll('[data-claim]').forEach(b=>b.onclick=()=>resolveClaim(0,b.dataset.claim));log(`打出的${label(t)}可操作：${opts.join('、')}。`);render();return true}
+function resolveClaim(pi,action){if(!state||state.ended)return;let t=state.claimTile,from=state.claimFrom;$('claimActions').innerHTML='';state.claimTile=null;state.claimFrom=-1;if(action==='成'){state.players[pi].hand.push(t);showWin(pi,false,t);return}if(action==='过'){processOtherClaims(from,t);return}if(action==='碰'||action==='杠'){let p=state.players[pi],need=action==='碰'?2:3,removed=0;for(let i=p.hand.length-1;i>=0&&removed<need;i--)if(tileKey(p.hand[i])===tileKey(t)){p.hand.splice(i,1);removed++}p.melds.push({type:action,tiles:[...Array(action==='杠'?4:3).fill(t)]});if(action==='杠'){state.turn=pi;let extra=drawFromTail(pi);if(extra)p.hand.push(extra);state.phase='discard';state.drawCount++;log(`${p.name} 杠 ${label(t)}，从牌尾补摸一张。`)}else{state.turn=pi;state.phase='discard';log(`${p.name} 碰 ${label(t)}，请立即打出一张。`)}render();if(pi!==0)runBots();return}continueAfterDiscard(from)}
+function processOtherClaims(from,t){let candidates=[];for(let step=1;step<4;step++){let qi=(from+step)%4;if(qi===0)continue;let opts=claimOptions(state.players[qi],t);if(opts.length)candidates.push({pi:qi,opts,step})}let chosen=candidates.find(c=>c.opts.includes('成'))||candidates.find(c=>c.opts.includes('杠'))||candidates.find(c=>c.opts.includes('碰'));if(chosen){state.claimTile=t;state.claimFrom=from;state.phase='claim';setTimeout(()=>{if(!state||state.ended)return;let action=chosen.opts.includes('成')?'成':chosen.opts.includes('杠')?'杠':'碰';resolveClaim(chosen.pi,action)},randomDelay());}else continueAfterDiscard(from)}
+function continueAfterDiscard(from){state.turn=(from+1)%4;state.phase='need-draw';if(state.walls.reduce((n,w)=>n+w.length,0)===0){endHand('牌山摸完，本把流局。');return}if(state.turn!==0)runBots();else render()}
+function drawFromTail(pi){for(let j=3;j>=0;j--){let idx=(state.wallSeat+j)%4;if(state.walls[idx].length){let entry=state.walls[idx].pop();if(state.wallVisual?.[idx]?.[entry.col])state.wallVisual[idx][entry.col][entry.layer]=false;renderWalls();return entry.tile}}return null}
+function doDiscard(pi,idx){let p=state.players[pi],t=p.hand.splice(idx,1)[0];p.discards.push(t);state.lastDiscard={tile:t,player:pi};state.recent.push(t);state.recent=state.recent.slice(-8);log(`${p.name} 打出 ${label(t)}${t.suit===p.shortage?'（缺门）':''}`);state.phase='claim';state.claimTile=t;state.claimFrom=pi;render();let humanOpts=claimOptions(state.players[0],t);if(pi!==0&&humanOpts.length){showClaimActions(0,t,pi);return}let candidates=[];for(let step=1;step<4;step++){let qi=(pi+step)%4,opts=claimOptions(state.players[qi],t);if(opts.length)candidates.push({pi:qi,opts,step})}let chosen=candidates.find(c=>c.opts.includes('成'))||candidates.find(c=>c.opts.includes('杠'))||candidates.find(c=>c.opts.includes('碰'));if(chosen){setTimeout(()=>{if(!state||state.ended)return;let action=chosen.opts.includes('成')?'成':chosen.opts.includes('杠')?'杠':'碰';resolveClaim(chosen.pi,action)},randomDelay());return}continueAfterDiscard(pi)}
+function randomDelay(){return 300+Math.floor(Math.random()*1701)}
+function draw(pi){if(!state||state.ended)return null;let t=takeWallTile();if(!t)return null;let p=state.players[pi];p.hand.push(t);state.drawCount++;state.drawnTile={pi,t};log(`${p.name} 摸到一张牌。`);render();return t}
+function runBots(){if(busy||!state||state.ended)return;busy=true;function step(){if(!state||state.ended){busy=false;return}if(state.turn===0){busy=false;render();return}let pi=state.turn,p=state.players[pi];if(state.phase==='need-draw'){let t=draw(pi);if(!t){busy=false;endHand('牌山摸完，本把流局。');return}if(canWinApprox(p)){busy=false;showWin(pi,true);return}state.phase='discard';render();setTimeout(step,randomDelay());return}if(state.phase==='discard'){sortHand(p.hand);let d=bestDiscard(p);$('aiHint').textContent=`${p.name}：打 ${label(d.tile)}。评估值 ${d.value.toFixed(2)}；综合手牌潜力、缺门约束与出牌风险。`;doDiscard(pi,d.idx);if(state.phase==='claim'&&state.claimTile){ // claim resolution may be scheduled by doDiscard
+ if(state.turn===0){busy=false;return}}
+ if(state.turn===0||state.phase==='claim'){busy=false;return}setTimeout(step,randomDelay());return}busy=false;render()}setTimeout(step,randomDelay())}
+function humanDraw(){if(!state||state.ended||state.turn!==0||state.phase!=='need-draw')return;let t=draw(0);if(!t){endHand('牌山摸完，本把流局。');return}if(canWinApprox(state.players[0])){showWin(0,true);return}state.phase='discard';sortHand(state.players[0].hand);render()}
+function rollStart(){if(state&&state.phase==='need-draw'&&state.turn===0)humanDraw()}
+function calculateConfirmedScore(p,selfDraw,winningTile=null){
+ // 按目前已确认口径累计普通牌型；成牌张专属点数仍需逐项确认，避免凭空加分。
+ const c=counts(p.hand), lines=['基础成牌：4 点'];
+ let extra=0;
+ for(const [k,n] of Object.entries(c)){
+   const t=p.hand.find(x=>tileKey(x)===k);
+   if(n>=3){extra+=2;lines.push(`手牌 ${label(t)} ×${n}：自家三张组合 +2 点`)}
+   if(n===4){extra+=10;lines.push(`手牌 ${label(t)} ×4，未杠：四活 +10 点`)}
+ }
+ for(const m of p.melds){
+   if(m.type==='碰'){extra+=1;lines.push(`明碰 ${label(m.tiles[0])}：+1 点`)}
+   else if(m.type==='杠'){extra+=2;lines.push(`杠 ${label(m.tiles[0])}：+2 点`)}
+ }
+ for(const suit of SUITS){
+   const n=p.hand.filter(t=>t.suit===suit).length;
+   if(n>=8){const pts=Math.min(5,n-7);extra+=pts;lines.push(`${suit}共 ${n} 张：只子 +${pts} 点`)}
+ }
+ for(const suit of SUITS){
+   const nums=new Set(p.hand.filter(t=>t.suit===suit).map(t=>t.n));
+   let big=Array.from({length:9},(_,i)=>i+1).every(n=>nums.has(n)), small=false;
+   for(let a=1;a<=4;a++)if(Array.from({length:6},(_,i)=>a+i).every(n=>nums.has(n)))small=true;
+   if(big){extra+=20;lines.push(`${suit} 1–9 连续九张：大连号 +20 点`)}
+   else if(small){extra+=5;lines.push(`${suit} 连续六张：小连号 +5 点`)}
+ }
+ // 棒棒：同一花色三组连续对子，如 22、33、44。
+ for(const suit of SUITS){
+   const ns=new Set(p.hand.filter(t=>t.suit===suit&&c[tileKey(t)]>=2).map(t=>t.n));
+   let found=false;for(let a=1;a<=7;a++)if(ns.has(a)&&ns.has(a+1)&&ns.has(a+2)){found=true;break}
+   if(found){extra+=5;lines.push(`${suit} 连续三组对子（棒棒）：+5 点`)}
+ }
+ if(p.melds.length===0&&p.hand.length===14&&Object.values(c).filter(n=>n===2).length===7&&Object.values(c).every(n=>n===2)){
+   extra+=31;lines.push('七对：+31 点');
+ }
+ const allTiles=[...p.hand,...p.melds.flatMap(m=>m.tiles)];
+ const numberSuits=new Set(allTiles.filter(t=>t.suit!=='字').map(t=>t.suit));
+ if(numberSuits.size===1){extra+=10;lines.push(`草一色（${[...numberSuits][0]}与字牌）：+10 点`)}
+ if(p.melds.length===0){extra+=5;lines.push('不动手（没有碰、杠）：+5 点')}
+ function allTripletsAndPair(){
+   if(p.melds.some(m=>!['碰','杠'].includes(m.type)))return false;
+   const cc={...c};
+   function walk(pairUsed){
+     const key=Object.keys(cc).find(k=>cc[k]>0);if(!key)return pairUsed;
+     const t=p.hand.find(x=>tileKey(x)===key);
+     if(!pairUsed&&cc[key]>=2){cc[key]-=2;if(walk(true))return true;cc[key]+=2}
+     if(cc[key]>=3){cc[key]-=3;if(walk(pairUsed))return true;cc[key]+=3}
+     if(t.suit!=='字'&&cc[key]>0){const k1=t.suit+(t.n+1),k2=t.suit+(t.n+2);if(cc[k1]>0&&cc[k2]>0)return false}
+     return false;
+   }
+   return walk(false);
+ }
+ if(allTripletsAndPair()){extra+=10;lines.push('对对胡：+10 点')}
+ const before=4+extra,total=selfDraw?before*2:before;
+ if(winningTile)lines.push(`成牌张：${label(winningTile)}（该牌带来的成牌分/摸子规则待逐项确认）`);
+ lines.push(`已识别牌型小计：4 + ${extra} = ${before} 点`);
+ if(selfDraw)lines.push(`普通自摸翻倍：${before} × 2 = ${total} 点`);else lines.push(`接别人打出的牌：不翻倍，${total} 点`);
+ lines.push('待补充识别：通、老小对、压裆/压当、三打一、枯只压、杠开/杠后赛花、各类大拿及成牌张专属点数。');
+ return {total,base:before,lines,winningTile};
+}
+function showWin(pi,selfDraw,winningTile=null){
+ let p=state.players[pi];
+ if(!winningTile){if(selfDraw&&state.drawnTile?.pi===pi)winningTile=state.drawnTile.t;else if(!selfDraw)winningTile=state.claimTile||null;}
+ const score=calculateConfirmedScore(p,selfDraw,winningTile);
+ // 暂按普通小摸子显示；压当、单吊、枯只压、杠开/赛花等特殊摸子须在规则引擎识别后再分类。
+ const moziCount=1, moziType='小摸子', moziYuan=5;
+ const detail=`<div><b>牌型点数：${score.total} 点</b></div><div>${score.lines.map(x=>`<div>• ${x}</div>`).join('')}</div><div style="margin-top:8px"><b>摸子：${moziCount} 个${moziType}，${moziYuan} 元</b></div><div class="warning">已计入：基础成牌、自家三张、碰杠、只子、大/小连号。通、棒棒、四活、草一色、对对胡、七对、大吊车、老小对、压裆、枯只压、杠开/赛花及大拿等仍待完善；成牌张已显示，但成牌张相关规则尚未全部识别。</div>`;
+ endHand(`${p.name}${selfDraw?'自摸':'接牌'}成牌。`,pi,selfDraw,detail)
+}
+function endHand(reason,winner=-1,selfDraw=false,detail=''){
+ if(!state||state.ended)return;busy=false;state.ended=true;state.phase='ended';state.handEndReason=reason;state.revealedWinner=winner;log('本把结束：'+reason);
+ // 不再套用旧版固定 +15/-5 的演示结算；正式货币清算等待完整倒子规则引擎实现。
+ let result=$('winResult');result.style.display='block';result.innerHTML=`<h2>${winner>=0?'成牌':'本把结束'}</h2><div>${reason}</div>${detail?`<div class="calc">${detail}<br><span style="color:#f1cd7b">正式牌型点数、摸子、杠开赛花及大拿结算尚未全部实现。</span></div>`:''}<div class="controls"><button class="primary" id="nextHand">下一把</button><button id="hideResult">隐藏结果</button></div>`;
+ $('nextHand').onclick=()=>{let keep=state.players.map(p=>p.won);let next=state.round+1;let roller=winner>=0?winner:(state.dealer>=0?state.dealer:0);result.style.display='none';prepareHand(next,keep,roller)};
+ $('hideResult').onclick=()=>{result.style.display='none'};
+ $('overlay').style.display='none';render();
+}
+function sortHuman(){if(state){sortHand(state.players[0].hand);render()}}
+function showHint(){if(!state||state.turn!==0||state.phase!=='discard'){$('aiHint').textContent='当前不是你的出牌阶段。';return}let d=bestDiscard(state.players[0]);$('aiHint').textContent=`建议打出 ${label(d.tile)}。评估值 ${d.value.toFixed(2)}。缺门牌有绝对优先权；其余牌综合组合潜力与风险。`}
+$('newGame').onclick=()=>prepareHand(1,[0,0,0,0],0);$('rollBtn').onclick=()=>{if(state.phase==='await-dice')rollDiceAndDeal();else if(state.phase==='need-draw'&&state.turn===0)humanDraw()};$('sortBtn').onclick=sortHuman;$('hintBtn').onclick=showHint;prepareHand();
+})();
+</script>
+</body></html>

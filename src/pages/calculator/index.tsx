@@ -1,419 +1,214 @@
-import { ActionSheet } from '@/components'
+import { computed, defineComponent, ref } from 'vue'
 import { useTitle } from '@/hooks'
-import { convertNumberToChinese, omitArray } from '@/utils'
-import { computed, defineComponent, Ref, ref } from 'vue'
-import CalcGroup from './components/CalcGroup'
-import CalcItem from './components/CalcItem'
+import {
+  EMPTY_SELECTION,
+  PAIR_OPTIONS,
+  TONG_OPTIONS,
+  ZHIZI_OPTIONS,
+  bigWinOptions,
+  extraOptions,
+  moziOptions,
+  scoreManualSelection,
+  type ManualSelection,
+  type MoziOption
+} from '@/game/manual'
+import CalcChip from './components/CalcChip'
+import CalcSection from './components/CalcSection'
 
-// TODO 单吊
+type PickKey = 'pairs' | 'zhizi' | 'tong'
+type ListKey = 'extras' | 'mozi' | 'bigWin'
 
-// 对子数
-const pairList = [1, 2, 3, 4]
-// 只子数
-const countList = [8, 9, 10, 11, 12]
-// 连通数
-const sameList = [5, 6, 7, 8]
-// 额外加分
-const extraList = [
-  '压裆',
-  '小连号',
-  '大连号',
-  '棒棒',
-  '不动手',
-  '四活',
-  '草一色',
-  '对对胡',
-  '七对',
-  '大吊车',
-  '老小对'
-]
-// 加摸子
-const moziList = ['枯只压', '三打一', '自摸(小)', '自摸(大)', '杠开', '清水']
-// 大拿
-const superList = [
-  '双连号',
-  '双棒棒',
-  '双通',
-  '双四活',
-  '一一九',
-  '清一色',
-  '双杠',
-  '三杠',
-  '三大坎+同门2张',
-  '乱分'
-]
-
-// 加点子中互斥的牌型
-const mutexedExtra = [
-  ['小连号', '大连号', '对对胡', '七对'],
-  ['大连号', '棒棒', '对对胡'],
-  ['四活', '对对胡']
-]
-
-// 单独点子数
-const extraScoreMap = {
-  压裆: 1,
-  小连号: 5,
-  大连号: 20,
-  棒棒: 5,
-  不动手: 5,
-  四活: 10,
-  草一色: 10,
-  对对胡: 10,
-  七对: 31,
-  大吊车: 31,
-  老小对: 5
-} as const
-
-// 摸子点子数
-const moziScoreMap = {
-  枯只压: 21,
-  杠开: 5
-} as const
+const freshSelection = (): ManualSelection => ({
+  ...EMPTY_SELECTION,
+  extras: [],
+  mozi: [],
+  bigWin: []
+})
 
 const CalculatorPage = defineComponent({
   name: 'CalculatorPage',
-  setup(props, ctx) {
-    useTitle('计算器')
-    const playerVisible = ref(false)
-    // const timesArray = ref<number[]>([])
-    // const valueArray = ref<number[]>([])
-    // // 摸子 小摸子算0.5 大摸子算1
-    // const moziArray = ref<number[]>([])
-    const pairSelected = ref<number[]>([])
-    const countSelected = ref<number[]>([])
-    const sameSelected = ref<number[]>([])
-    const extraSelected = ref<string[]>([])
-    const moziSelected = ref<string[]>([])
-    const superSelected = ref<string[]>([])
-    // 最小的杂牌 5点
-    const smallestSelected = ref(false)
+  setup() {
+    useTitle('算分')
 
-    /**
-     * 是否选了成牌
-     */
-    const toggleSmallest = () => {
-      if (smallestSelected.value) {
-        if (
-          !(
-            pairSelected.value.length ||
-            countSelected.value.length ||
-            sameSelected.value.length ||
-            extraSelected.value.length ||
-            moziSelected.value.length ||
-            superSelected.value.length
-          )
-        ) {
-          // 只要有成牌 就不可取消
-          smallestSelected.value = false
-        }
-      } else {
-        smallestSelected.value = true
+    const selection = ref<ManualSelection>(freshSelection())
+    const extras = extraOptions()
+    const moziTable = moziOptions()
+    const bigWins = bigWinOptions()
+    const result = computed(() => scoreManualSelection(selection.value))
+
+    const pick = (key: PickKey, value: number) => {
+      selection.value = { ...selection.value, [key]: selection.value[key] === value ? null : value }
+    }
+
+    const toggle = (key: ListKey, name: string) => {
+      const list = selection.value[key]
+      selection.value = {
+        ...selection.value,
+        [key]: list.includes(name) ? list.filter(item => item !== name) : [...list, name]
       }
     }
 
-    /**
-     * 切换选中/未选中
-     * @param list 列表
-     * @param item 选中的项
-     * @param mutex 互斥选项 默认 false，只解决本组互斥性
-     */
-    const toggleSelected = (
-      list: Ref<(string | number)[]>,
-      item: string | number,
-      mutex: boolean = false
-    ) => {
-      const index = list.value.indexOf(item)
-      if (index > -1) {
-        list.value.splice(index, 1)
-      } else {
-        if (mutex === true) {
-          list.value = [item]
-        } else {
-          list.value.push(item)
-        }
-        // 选中后校验和其它已选项之间的互斥性
-        checkMutex(list, item)
+    // 同一手牌只会是一种成牌方式：自摸 / 自摸压当 / 枯只压 三选一
+    const toggleMozi = (option: MoziOption) => {
+      const list = selection.value.mozi
+      if (list.includes(option.name)) {
+        selection.value = { ...selection.value, mozi: list.filter(name => name !== option.name) }
+        return
       }
-      // 自动选择成牌
-      if (!smallestSelected.value) {
-        if (pairSelected.value.length ||
-          countSelected.value.length ||
-          sameSelected.value.length ||
-          extraSelected.value.length ||
-          moziSelected.value.length ||
-          superSelected.value.length) {
-            smallestSelected.value = true
-          }
-      }
+      const group = option.exclusiveGroup
+      const kept = group
+        ? list.filter(name => moziTable.find(item => item.name === name)?.exclusiveGroup !== group)
+        : list
+      selection.value = { ...selection.value, mozi: [...kept, option.name] }
     }
 
-    /**
-     * 检验成牌互斥性
-     * 1. 选中大拿则清空除摸子以外的牌
-     * 2. 加点子里的一些互斥牌
-     * @param list 列表
-     * @param item 选中的项
-     */
-    const checkMutex = (list: Ref<(string | number)[]>, item: string | number) => {
-      // 如果已选择成拍
-      if (smallestSelected.value) {
-        if (list !== moziSelected || ['杠开', '清水'].includes(item as string)) {
-          smallestSelected.value = false
-        }
-      }
-      // 草一色和通冲突
-      if (item === '草一色') {
-        sameSelected.value = []
-      }
-      if (list === sameSelected) {
-        const index = extraSelected.value.indexOf('草一色')
-        if (~index) {
-          extraSelected.value.splice(index, 1)
-        }
-      }
-      // 大拿牌
-      if (list === superSelected) {
-        pairSelected.value = []
-        countSelected.value = []
-        sameSelected.value = []
-      } else {
-        // 非大拿 清空大拿牌
-        if (superSelected.value.length) {
-          superSelected.value = []
-        }
-        if (list === extraSelected) {
-          // 加点子之间的冲突
-          for (const _list of mutexedExtra) {
-            if (_list.includes(item as string)) {
-              for (const _item of _list) {
-                if (_item !== item) {
-                  const index = list.value.indexOf(_item)
-                  if (~index) {
-                    list.value.splice(index, 1)
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
+    const clear = () => {
+      selection.value = freshSelection()
     }
 
-    /**
-     * 计算得分
-     */
-    const calcScore = () => {
-      let isSuper = false
-      // 直接大拿牌
-      if (superSelected.value.length) {
-        isSuper = true
-      }
-      let score = []
-      // 成牌
-      if (smallestSelected.value) {
-        score.push(4)
-      }
-      // 对子
-      if (pairSelected.value.length) {
-        score.push(pairSelected.value[0])
-      }
-      // 只子
-      if (countSelected.value.length) {
-        score.push(countSelected.value[0] - 7)
-      }
-      // 通
-      if (sameSelected.value.length) {
-        score.push(sameSelected.value[0])
-      }
-      // 额外点子
-      if (extraSelected.value.length) {
-        for (const item of extraSelected.value) {
-          score.push(extraScoreMap[item as keyof typeof extraScoreMap])
-        }
-      }
-      // 点数加倍
-      const times: number[] = []
-      // 加摸子
-      const mozi: number[] = []
-      // 摸子加倍
-      const moziTimes: number[] = []
-      if (moziSelected.value.length) {
-        if (moziSelected.value.includes('枯只压')) {
-          score.push(21)
-          mozi.push(1)
-        }
-        if (moziSelected.value.includes('三打一')) {
-          mozi.push(0.5)
-        }
-        if (moziSelected.value.includes('自摸(小)')) {
-          times.push(2)
-          mozi.push(0.5)
-        }
-        if (moziSelected.value.includes('自摸(大)')) {
-          times.push(2)
-          mozi.push(1)
-        }
-        if (moziSelected.value.includes('杠开')) {
-          score.push(5)
-          times.push(2)
-          mozi.push(1)
-          moziTimes.push(2)
-        }
-        if (moziSelected.value.includes('清水')) {
-          mozi.push(1.5)
-        }
-      }
-      return { isSuper, score, mozi, times, moziTimes }
-    }
-
-    const calcArray = (arr: number[]) => arr.reduce<number>((count, item) => (count += item), 0)
-
-    const scoreText = computed(() => {
-      let scoreTxt = ''
-      let moziTxt = ''
-      const { isSuper, score, mozi, times, moziTimes } = calcScore()
-      if (isSuper) {
-        scoreTxt = '大拿'
-      } else {
-        // 2大牌
-        if (score.includes(31) && score.includes(10)) {
-          scoreTxt = '大拿'
-        } else {
-          const scoreCount = (times.length ? calcArray(times) : 1) * calcArray(score)
-          if (scoreCount >= 50) {
-            scoreTxt = '大拿'
-          } else {
-            scoreTxt = `${times.length ? `${times.join(' * ')} * (` : ''}${score.join(' + ')}${
-              times.length ? ')' : ''
-            } = ${scoreCount}`
-          }
-        }
-        if (mozi.length) {
-          const moziCount = (calcArray(moziTimes) || 1) * calcArray(mozi)
-          // 大摸子
-          const bigMozi = Math.floor(moziCount)
-          // 小摸子
-          const smallMozi = (moziCount - bigMozi) * 2
-          const arr = []
-          if (bigMozi) {
-            arr.push(`${bigMozi}个大摸子`)
-          }
-          if (smallMozi) {
-            arr.push(`${smallMozi}个小摸子`)
-          }
-          moziTxt = arr.join(' + ')
-        }
-      }
-      const scoreDom = <div class="text-lg">{scoreTxt}</div>
-      if (mozi.length) {
-        return (
-          <div>
-            {scoreDom}
-            <div class="text-sm">{moziTxt}</div>
-          </div>
-        )
-      }
-      return scoreDom
-    })
-
-    const save = () => {
-      playerVisible.value = true
-    }
-
-    return () => (
-      <div>
-        <ActionSheet v-model:visible={playerVisible.value} items={[
-          { title: '玩家1', key: 'player1' },
-          { title: '玩家2', key: 'player2' },
-          { title: '玩家3', key: 'player3' },
-          { title: '玩家4', key: 'player4' },
-        ]} onConfirm={console.log} />
-        <div class="flex bg-[#535455] bg-opacity-75 h-12 text-white px-4 items-center relative">
-          {scoreText.value}
-          {smallestSelected.value && <button class="rounded bg-green-500 border-green-700 text-white text-sm py-1 px-2 top-2.5 right-2 absolute" onClick={save}>保存点子</button>}
-        </div>
-        <CalcGroup title="对子数">
-          {pairList.map(pair => (
-            <CalcItem
-              key={pair}
-              selected={pairSelected.value.includes(pair)}
-              point={pair}
-              onClick={() => toggleSelected(pairSelected, pair, true)}
-            >
-              {convertNumberToChinese(pair)}对
-            </CalcItem>
-          ))}
-          <CalcItem
-            class="bg-purple-100 border-purple-200"
-            selected={smallestSelected.value}
-            point={4}
-            onClick={toggleSmallest}
-          >
-            成牌
-          </CalcItem>
-        </CalcGroup>
-        <CalcGroup title="只子数">
-          {countList.map(count => (
-            <CalcItem
-              key={count}
-              point={count - 7}
-              selected={countSelected.value.includes(count)}
-              onClick={() => toggleSelected(countSelected, count, true)}
-            >
-              {convertNumberToChinese(count)}只
-            </CalcItem>
-          ))}
-        </CalcGroup>
-        <CalcGroup title="连通数">
-          {sameList.map(same => (
-            <CalcItem
-              key={same}
-              point={same}
-              selected={sameSelected.value.includes(same)}
-              onClick={() => toggleSelected(sameSelected, same, true)}
-            >
-              {convertNumberToChinese(same)}通
-            </CalcItem>
-          ))}
-        </CalcGroup>
-        <CalcGroup title="加点子">
-          {extraList.map(extra => (
-            <CalcItem
-              key={extra}
-              point={extraScoreMap[extra as keyof typeof extraScoreMap]}
-              selected={extraSelected.value.includes(extra)}
-              onClick={() => toggleSelected(extraSelected, extra)}
-            >
-              {extra}
-            </CalcItem>
-          ))}
-        </CalcGroup>
-        <CalcGroup title="加摸子">
-          {moziList.map(mozi => (
-            <CalcItem
-              key={mozi}
-              point={moziScoreMap[mozi as keyof typeof moziScoreMap]}
-              selected={moziSelected.value.includes(mozi)}
-              onClick={() => toggleSelected(moziSelected, mozi)}
-            >
-              {mozi}
-            </CalcItem>
-          ))}
-        </CalcGroup>
-        <CalcGroup title="大拿">
-          {superList.map(sup => (
-            <CalcItem
-              key={sup}
-              selected={superSelected.value.includes(sup)}
-              onClick={() => toggleSelected(superSelected, sup, true)}
-            >
-              {sup}
-            </CalcItem>
-          ))}
-        </CalcGroup>
-      </div>
+    const hasSelection = computed(
+      () =>
+        selection.value.pairs !== null ||
+        selection.value.zhizi !== null ||
+        selection.value.tong !== null ||
+        selection.value.extras.length > 0 ||
+        selection.value.mozi.length > 0 ||
+        selection.value.bigWin.length > 0
     )
+
+    return () => {
+      const data = result.value
+      return (
+        <div class="flex min-h-0 flex-1 flex-col">
+          {/* 结果条：一直贴在顶上，算分时不用来回滚 */}
+          <div class="result-bar sticky top-14 z-10 px-5 py-3.5">
+            <div class="flex items-end justify-between gap-3">
+              <div class="min-w-0">
+                <div class="flex items-baseline gap-1.5">
+                  <span class="font-serif text-[2.1rem] leading-none text-ivory">{data.total}</span>
+                  <span class="text-[12px] text-mist">点</span>
+                  {data.isBigWin && (
+                    <span class="ml-1 rounded-[5px] bg-vermillion px-1.5 py-0.5 text-[10px] leading-none text-ivory">
+                      大拿
+                    </span>
+                  )}
+                </div>
+                <div class="mt-1.5 truncate text-[11px] text-mist">
+                  {data.multiplier > 1 ? `${data.subtotal} 点 × 2` : `${data.subtotal} 点`}
+                  {data.moziUnits > 0 ? ` · 摸子 ${data.moziBig} 大 ${data.moziSmall} 小` : ''}
+                </div>
+              </div>
+              <div class="shrink-0 text-right">
+                <div class="flex items-baseline justify-end gap-1">
+                  <span class="font-serif text-[1.4rem] leading-none text-brass">{data.perOpponent}</span>
+                  <span class="text-[10px] text-mist">元/家</span>
+                </div>
+                <div class="mt-2 text-[11px] text-mist">三家合计 {data.moneyTotal}</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="min-h-0 flex-1 overflow-y-auto px-5 pb-28">
+            <CalcSection title="对子" hint="碰 1 / 暗刻 2 / 杠 2">
+              {PAIR_OPTIONS.map(value => (
+                <CalcChip
+                  key={value}
+                  label={`${value} 对`}
+                  point={value}
+                  selected={selection.value.pairs === value}
+                  onClick={() => pick('pairs', value)}
+                />
+              ))}
+            </CalcSection>
+
+            <CalcSection title="只子" hint="同一门 8 张起">
+              {ZHIZI_OPTIONS.map(value => (
+                <CalcChip
+                  key={value}
+                  label={`${value} 张`}
+                  point={value - 7}
+                  selected={selection.value.zhizi === value}
+                  onClick={() => pick('zhizi', value)}
+                />
+              ))}
+            </CalcSection>
+
+            <CalcSection title="通" hint="同一数字跨两门 5 张起">
+              {TONG_OPTIONS.map(value => (
+                <CalcChip
+                  key={value}
+                  label={`${value} 通`}
+                  point={value}
+                  selected={selection.value.tong === value}
+                  onClick={() => pick('tong', value)}
+                />
+              ))}
+            </CalcSection>
+
+            <CalcSection title="加点子" hint="符合多少就加多少，没有互斥" columns={3}>
+              {extras.map(option => (
+                <CalcChip
+                  key={option.name}
+                  label={option.name}
+                  point={option.points}
+                  hint={option.hint}
+                  selected={selection.value.extras.includes(option.name)}
+                  onClick={() => toggle('extras', option.name)}
+                />
+              ))}
+            </CalcSection>
+
+            <CalcSection title="摸子" hint="大摸子 10 元 / 小摸子 5 元" columns={2}>
+              {moziTable.map(option => (
+                <CalcChip
+                  key={option.name}
+                  label={option.name}
+                  point={option.points}
+                  hint={option.hint}
+                  selected={selection.value.mozi.includes(option.name)}
+                  onClick={() => toggleMozi(option)}
+                />
+              ))}
+            </CalcSection>
+
+            <CalcSection title="大拿" hint="命中即大拿，每家 40 元" columns={2}>
+              {bigWins.map(name => (
+                <CalcChip
+                  key={name}
+                  label={name}
+                  selected={selection.value.bigWin.includes(name)}
+                  onClick={() => toggle('bigWin', name)}
+                />
+              ))}
+            </CalcSection>
+
+            {/* 明细 */}
+            <section class="brass-card mt-8 rounded-2xl p-4">
+              <div class="mb-2.5 flex items-center gap-2">
+                <h2 class="font-serif text-[12px] tracking-[0.3em] text-brass">明细</h2>
+                {hasSelection.value && (
+                  <button type="button" class="ghost-btn ml-auto rounded-full px-3 py-1 text-[11px]" onClick={clear}>
+                    清空
+                  </button>
+                )}
+              </div>
+              <div class="space-y-1.5 text-[12px] leading-5 text-ivory" style={{ opacity: 0.85 }}>
+                {data.lines.map((line, index) => (
+                  <div key={index} class={index === data.lines.length - 1 ? 'text-brass' : ''}>
+                    {line}
+                  </div>
+                ))}
+              </div>
+              {data.isBigWin && (
+                <div class="mt-3 text-[11px] leading-5 text-mist">
+                  大拿原因：{data.bigWinReasons.join('；')}
+                </div>
+              )}
+            </section>
+          </div>
+        </div>
+      )
+    }
   }
 })
 

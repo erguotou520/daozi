@@ -12,31 +12,30 @@ export const TheHeaderProps = {
 const TheHeader = defineComponent({
   name: 'TheHeader',
   props: TheHeaderProps,
-  setup(props, ctx) {
+  setup(props) {
     const route = useRoute()
     const router = useRouter()
 
-    const isHomepage = computed(() => route.path === '/')
+    // 首页不放头部，主视觉自己承担品牌
+    const visible = computed(() => route.path !== '/')
 
-    const back = () => {
-      router.back()
-    }
-
-    return () => (
-      <div class="bg-primary flex h-12 items-center">
-        <div
-          class={[
-            'w-12 h-12 flex items-center justify-center flex-shrink-0',
-            isHomepage.value ? 'opacity-0 pointer-events-none' : ''
-          ]}
-          onClick={back}
-        >
-          <LeftOutlined class="text-white" />
-        </div>
-        <div class="flex-1 text-center text-white px-10 truncate">{props.title}</div>
-        <div class="flex-shrink-0 w-12"></div>
-      </div>
-    )
+    return () =>
+      visible.value ? (
+        <header class="header-veil sticky top-0 z-20 flex h-14 shrink-0 items-center gap-1 px-2">
+          <button
+            type="button"
+            aria-label="返回"
+            class="ghost-btn flex h-9 w-9 items-center justify-center rounded-full text-sm"
+            onClick={() => router.back()}
+          >
+            <LeftOutlined />
+          </button>
+          <h1 class="min-w-0 flex-1 truncate px-3 text-center font-serif text-[15px] tracking-[0.3em] text-ivory">
+            {props.title}
+          </h1>
+          <div class="h-9 w-9 shrink-0" />
+        </header>
+      ) : null
   }
 })
 

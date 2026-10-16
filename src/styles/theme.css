@@ -1,0 +1,333 @@
+/**
+ * 和县刀子 · 基础样式
+ *
+ * 设计方向：牌桌质感 —— 深毡绿底、象牙牌面、黄铜描边、朱红印章。
+ * 这里只放「用工具类不好表达」的东西：底色、牌面立体边、入场动效。
+ */
+
+:root {
+  --felt-900: #071c17;
+  --felt-800: #0b2a22;
+  --felt-600: #16483a;
+  --ivory: #f4ecdc;
+  --edge: #b8a483;
+  --brass: #d9b45f;
+  --vermillion: #c8452f;
+  --mist: #9db8ad;
+  --ink: #0a1f1a;
+}
+
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  background: var(--felt-900);
+}
+
+body {
+  margin: 0;
+  color: var(--ivory);
+  background: var(--felt-900);
+  font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  overscroll-behavior-y: none;
+}
+
+::selection {
+  background: var(--brass);
+  color: var(--ink);
+}
+
+:focus-visible {
+  outline: 2px solid var(--brass);
+  outline-offset: 2px;
+}
+
+/* 毡面：中心偏上的柔光 + 底部压暗，模拟灯光下的牌桌 */
+.felt-bg {
+  min-height: var(--app-vh, 100vh);
+  background-color: var(--felt-800);
+  background-image:
+    radial-gradient(120% 62% at 50% -6%, rgba(30, 92, 73, 0.95) 0%, rgba(11, 42, 34, 0) 62%),
+    linear-gradient(180deg, #0d3128 0%, #071c17 100%);
+}
+
+/* 应用主列：移动端满宽，桌面端收在中间，避免拉成一条奇怪的宽版 */
+.app-shell {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 34rem;
+  min-height: var(--app-vh, 100vh);
+  margin: 0 auto;
+}
+
+/* 牌桌主列：铺开到桌面宽度，并且严格占满一屏（牌桌不该滚动） */
+.wide-shell {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 64rem;
+  height: var(--app-vh, 100vh);
+  margin: 0 auto;
+  overflow: hidden;
+}
+
+/* 牌面：象牙色 + 下沿厚度，是整套 UI 的记忆点 */
+.tile-face {
+  background-image: linear-gradient(178deg, #faf5e8 0%, #efe4cb 62%, #e2d5b8 100%);
+  box-shadow: 0 4px 0 var(--edge), 0 10px 18px rgba(0, 0, 0, 0.34),
+    inset 0 1px 0 rgba(255, 255, 255, 0.75), inset 0 -1px 0 rgba(0, 0, 0, 0.05);
+}
+
+.tile-face-sm {
+  background-image: linear-gradient(178deg, #faf5e8 0%, #efe4cb 62%, #e2d5b8 100%);
+  box-shadow: 0 3px 0 var(--edge), 0 6px 10px rgba(0, 0, 0, 0.28),
+    inset 0 1px 0 rgba(255, 255, 255, 0.7);
+}
+
+/* 可按压的牌：按下时厚度收掉 */
+.tile-press {
+  transition: transform 0.12s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.12s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.tile-press:active {
+  transform: translateY(3px);
+  box-shadow: 0 1px 0 var(--edge), 0 3px 6px rgba(0, 0, 0, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.6);
+}
+
+/* 细描边卡片：不用毛玻璃，改用黄铜细线与极浅的底色 */
+.brass-card {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.045) 0%, rgba(255, 255, 255, 0.015) 100%);
+  border: 1px solid rgba(217, 180, 95, 0.22);
+}
+
+/* 顶部条：滚动时压住内容，但不用毛玻璃堆质感 */
+.header-veil {
+  background: linear-gradient(180deg, rgba(7, 28, 23, 0.96) 0%, rgba(7, 28, 23, 0.78) 100%);
+  border-bottom: 1px solid rgba(217, 180, 95, 0.14);
+  backdrop-filter: blur(8px);
+}
+
+/* 幽灵按钮：细黄铜描边，按下轻微缩小 */
+.ghost-btn {
+  border: 1px solid rgba(217, 180, 95, 0.3);
+  color: var(--brass);
+  transition: transform 0.12s cubic-bezier(0.22, 1, 0.36, 1), background-color 0.15s ease;
+}
+
+.ghost-btn:active {
+  transform: scale(0.94);
+  background: rgba(217, 180, 95, 0.12);
+}
+
+/* 未选中的牌型按钮：浅色描边 */
+.chip {
+  border: 1px solid rgba(217, 180, 95, 0.2);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--ivory);
+  transition: transform 0.12s cubic-bezier(0.22, 1, 0.36, 1), border-color 0.15s ease,
+    background-color 0.15s ease;
+}
+
+.chip:active {
+  transform: scale(0.96);
+}
+
+.chip-on {
+  border-color: transparent;
+  background-image: linear-gradient(178deg, #f7efdc 0%, #e6d9ba 100%);
+  color: var(--ink);
+  box-shadow: 0 3px 0 var(--edge), 0 6px 12px rgba(0, 0, 0, 0.3);
+}
+
+/* 结果条：黄铜上边框 + 深底 */
+.result-bar {
+  background: linear-gradient(180deg, rgba(22, 72, 58, 0.9) 0%, rgba(7, 28, 23, 0.92) 100%);
+  border-top: 1px solid rgba(217, 180, 95, 0.35);
+  border-bottom: 1px solid rgba(217, 180, 95, 0.14);
+}
+
+/* ------------------------------------------------------------------ *
+ * 牌桌（按原型排布：牌山内圈、牌河外圈、四家围坐）
+ * ------------------------------------------------------------------ */
+
+.table-surface {
+  /* 所有牌的尺寸都按牌桌宽度（--bw，由 JS 量出来）取比例，
+     这样从手机到桌面都是同一张桌子，只是整体缩放 */
+  --t-hand: calc(var(--bw, 640px) * 0.045);
+  --t-seat: calc(var(--bw, 640px) * 0.028);
+  --t-discard: calc(var(--bw, 640px) * 0.032);
+  --t-meld: calc(var(--bw, 640px) * 0.034);
+  --wall-w: calc(var(--bw, 640px) * 0.017);
+  --wall-h: calc(var(--bw, 640px) * 0.024);
+  /* 一圈牌墙的长度：固定 17 墩，四面才能围成方圈 */
+  --ring: calc(17 * (var(--wall-w) + 2px));
+
+  position: relative;
+  overflow: hidden;
+  border-radius: 1.25rem;
+  padding: clamp(6px, 1.1vw, 16px);
+  background:
+    radial-gradient(125% 95% at 50% 0%, #1e5c49 0%, #144535 46%, #0e3128 100%);
+  box-shadow:
+    0 0 0 clamp(4px, 0.7vw, 9px) #4a3a26,
+    0 16px 36px rgba(0, 0, 0, 0.5),
+    inset 0 0 0 1px rgba(217, 180, 95, 0.16),
+    inset 0 0 70px rgba(0, 0, 0, 0.38);
+}
+
+/* 牌的统一外形：宽度由 --t-* 决定，高度按牌具比例 */
+.tile-box {
+  aspect-ratio: 3 / 4.1;
+}
+
+/* 牌山：一墩就是上下（或左右）两层，摸走哪层哪层留空 */
+.wall-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  width: var(--wall-w);
+  height: var(--wall-h);
+}
+
+.wall-stack.is-flat {
+  flex-direction: row;
+  width: var(--wall-h);
+  height: var(--wall-w);
+}
+
+.wall-layer {
+  flex: 1;
+  border-radius: 1.5px;
+  background: linear-gradient(180deg, #3d8368 0%, #245b45 58%, #17402f 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18), 0 1px 1px rgba(0, 0, 0, 0.35);
+}
+
+.wall-stack.is-flat .wall-layer {
+  background: linear-gradient(90deg, #3d8368 0%, #245b45 58%, #17402f 100%);
+}
+
+/* 手里的牌：按键底子 */
+.hand-tile {
+  transition: transform 0.12s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.hand-tile:not(:disabled):active {
+  transform: translateY(3px);
+}
+
+.hand-tile.is-drawn {
+  transform: translateY(-5px);
+}
+
+
+.brass-rule {
+  background: linear-gradient(90deg, rgba(217, 180, 95, 0) 0%, rgba(217, 180, 95, 0.55) 50%, rgba(217, 180, 95, 0) 100%);
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.rise {
+  animation: rise 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.fade-in {
+  animation: fadeIn 0.3s ease-out both;
+}
+
+@keyframes sealIn {
+  0% {
+    opacity: 0;
+    transform: rotate(-14deg) scale(0.7);
+  }
+  100% {
+    opacity: 1;
+    transform: rotate(-8deg) scale(1);
+  }
+}
+
+.seal-in {
+  animation: sealIn 0.6s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rise,
+  .fade-in,
+  .seal-in {
+    animation: none;
+  }
+  .tile-press {
+    transition: none;
+  }
+}
+
+/* ------------------------------------------------------------------ *
+ * 牌桌上的小动作
+ * ------------------------------------------------------------------ */
+
+@keyframes tileIn {
+  from {
+    opacity: 0;
+    transform: translateY(7px) scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.tile-in {
+  animation: tileIn 0.2s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes markPop {
+  0% {
+    transform: scale(0.82);
+  }
+  60% {
+    transform: scale(1.06);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.tile-mark {
+  animation: markPop 0.26s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* 接牌按钮出现时抬一下，提醒可以操作 */
+.claim-in {
+  animation: rise 0.22s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tile-in,
+  .tile-mark,
+  .claim-in {
+    animation: none;
+  }
+}
