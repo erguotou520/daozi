@@ -34,8 +34,8 @@ export default defineConfig({
       manifest: {
         name: '和县刀子',
         short_name: '和县刀子',
-        description: '和县刀子工具箱',
-        theme_color: '#ffffff',
+        description: '和县刀子 · 算分与对局',
+        theme_color: '#0B2A22',
         icons: [
           {
             src: 'logo-192_192.png',

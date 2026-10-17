@@ -11,8 +11,8 @@ const CommonLayout = defineComponent({
   setup(props, ctx) {
     const title = ref('和县刀子')
     const route = useRoute()
-    // 牌桌要铺开，不能塞进手机宽的那条列里
-    const wide = computed(() => route.path.startsWith('/table'))
+    // 主路由就是牌桌：全屏铺开，不套手机宽的列
+    const wide = computed(() => route.path === '/')
 
     provide(layoutKey, {
       setTitle(v: string) {

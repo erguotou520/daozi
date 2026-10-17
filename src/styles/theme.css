@@ -65,14 +65,12 @@ body {
   margin: 0 auto;
 }
 
-/* 牌桌主列：铺开到桌面宽度，并且严格占满一屏（牌桌不该滚动） */
+/* 牌桌主列：全屏铺开、严格占满一屏（牌桌不该滚动） */
 .wide-shell {
   display: flex;
   flex-direction: column;
   width: 100%;
-  max-width: 64rem;
   height: var(--app-vh, 100vh);
-  margin: 0 auto;
   overflow: hidden;
 }
 
