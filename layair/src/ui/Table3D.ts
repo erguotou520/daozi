@@ -446,7 +446,7 @@ export class Table3D {
 
   private addMelds(seat: number, player: HandState['players'][number]) {
     if (!player.melds.length) return
-    const flatGap = FLAT_W + 1
+    const flatGap = FLAT_W
     let cursor = 0
     for (const meld of player.melds) {
       const tiles = meldTiles(meld)
@@ -461,10 +461,10 @@ export class Table3D {
           z = -260
         } else if (seat === 3) {
           x = -560
-          z = 250 - cursor * FLAT_D
+          z = 250 - cursor * flatGap
         } else {
           x = 560
-          z = 250 - cursor * FLAT_D
+          z = 250 - cursor * flatGap
         }
         this.addFlatTile(tile, x, z, this.dynamicRoot, seat === 3 ? 90 : seat === 1 ? -90 : 0)
         cursor += 1
@@ -476,7 +476,11 @@ export class Table3D {
   private addDiscards(seat: number, tiles: Tile[]) {
     if (!tiles.length) return
     const last = this.hand?.lastPlayed
-    const step = 52
+    // 牌与牌紧挨着（跟手牌一样 step = 牌宽，不留缝）：
+    // 列距 = 牌宽，行距 = 牌深；左右家整块转 90°，宽深互换，
+    // 所以 col 走 z、line 走 x 时同样用这两个步长。
+    const colStep = FLAT_W
+    const lineStep = FLAT_D
     const maxCols = seat === 0 || seat === 2 ? 8 : 7
     for (let i = 0; i < tiles.length; i += 1) {
       const tile = tiles[i]
@@ -486,18 +490,18 @@ export class Table3D {
       let z = 0
       let rotation = 0
       if (seat === 0) {
-        x = -maxCols * step / 2 + col * step
-        z = 70 - line * step
+        x = -((maxCols - 1) * colStep) / 2 + col * colStep
+        z = 70 - line * lineStep
       } else if (seat === 2) {
-        x = maxCols * step / 2 - col * step
-        z = -180 + line * step
+        x = ((maxCols - 1) * colStep) / 2 - col * colStep
+        z = -180 + line * lineStep
       } else if (seat === 3) {
-        x = -430 - line * 54
-        z = -100 + col * 52
+        x = -430 - line * lineStep
+        z = -100 + col * colStep
         rotation = 90
       } else {
-        x = 430 + line * 54
-        z = 100 - col * 52
+        x = 430 + line * lineStep
+        z = 100 - col * colStep
         rotation = -90
       }
       const node = this.addFlatTile(tile, x, z, this.dynamicRoot, rotation)
