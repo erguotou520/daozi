@@ -24,7 +24,7 @@ export const COLORS = {
   wood: '#6B4F2E',
   woodLight: '#8A6A3F',
   woodDark: '#2B2118',
-  table: '#17553F',
+  table: '#0F3D31',
   tableLight: '#2A7A5F',
   warn: '#E08A72'
 }

@@ -55,6 +55,18 @@ function hexColor(hex: string, alpha = 1): Laya.Color {
   return new Laya.Color(r, g, b, alpha)
 }
 
+/** 收集场景里所有平行光（场景文件自带的灯，调亮度用） */
+function scene_getLights(root: Laya.Node): Laya.DirectionLightCom[] {
+  const out: Laya.DirectionLightCom[] = []
+  const walk = (node: Laya.Node) => {
+    const comp = (node as unknown as Laya.Sprite3D).getComponent?.(Laya.DirectionLightCom)
+    if (comp) out.push(comp)
+    for (let i = 0; i < node.numChildren; i += 1) walk(node.getChildAt(i))
+  }
+  walk(root)
+  return out
+}
+
 /**
  * 固定相机 3D 牌桌。
  *
@@ -134,6 +146,12 @@ export class Table3D {
   /** 相机始终在本家后上方，固定视角；世界尺寸不随窗口拉伸 */
   private buildTable() {
     this.tableRoot.destroyChildren()
+
+    // 整体提亮：场景自带的环境光偏暗（0.42,0.46,0.53），牌和桌面都发黑
+    this.scene.ambientColor = new Laya.Color(0.72, 0.76, 0.78)
+    scene_getLights(this.scene).forEach(light => {
+      light.intensity = 1.35
+    })
 
     // 桌布 + 四边木框
     this.addBox(TABLE_W, 26, TABLE_D, COLORS.table, 0, -13, 0, this.tableRoot)
@@ -268,7 +286,7 @@ export class Table3D {
     if (mat) return mat
     mat = new Laya.BlinnPhongMaterial()
     mat.albedoColor = hexColor(color)
-    mat.albedoIntensity = 0.95
+    mat.albedoIntensity = 1.15
     this.bodyCache.set(color, mat)
     return mat
   }
@@ -333,7 +351,12 @@ export class Table3D {
     return tex
   }
 
-  /** 站立牌：自己/亮牌用牌面，对家/左右家背面用绿牌背 */
+  /**
+   * 站立牌：按真牌的结构分两段——
+   *   靠背面 30% 厚度是绿色长方体（牌背），靠牌面 70% 是象牙白长方体（牌身）。
+   * 亮牌时白身正面贴牌面；牌背朝相机时只看到那 30% 的绿，侧面看到的是白身，
+   * 这样牌和深绿桌面天然区分开（整只绿牌会和桌面糊在一起）。
+   */
   private addStandingTile(
     tile: Tile,
     x: number,
@@ -341,19 +364,29 @@ export class Table3D {
     z: number,
     faceUp: boolean,
     parent: Laya.Sprite3D,
-    rotationY = 0,
-    drawn = false
+    rotationY = 0
   ) {
     const group = new Laya.Sprite3D()
     group.transform.position = new Laya.Vector3(x, y, z)
     group.transform.rotationEuler = new Laya.Vector3(0, rotationY, 0)
     parent.addChild(group)
 
-    // 牌背（对家/左右家）直接用亮一档的绿牌体，不再贴任何面板：
-    // 薄面板一旦套 BlinnPhong 材质，法线在 1.7 的厚度上退化，整组手牌会一起不渲染
-    //（牌背一直"消失"就是这个），想加牌背贴图只能等换 Unlit 贴图管线再试。
-    const bodyColor = faceUp ? '#2F7A5E' : '#3C9374'
-    this.addRounded(TILE_W, TILE_H, TILE_T, 4.5, this.bodyMaterial(bodyColor), 0, 0, 0, group)
+    const greenT = TILE_T * 0.3
+    const whiteT = TILE_T - greenT
+    // 绿背：占背面 30% 厚度，颜色比牌墙亮一档，和深绿桌面区分
+    this.addRounded(TILE_W, TILE_H, greenT, 2.6, this.bodyMaterial('#4CAF87'), 0, 0, -TILE_T / 2 + greenT / 2, group)
+    // 白身：其余 70%，象牙白；往绿背方向多咬 0.6 避免接缝漏光
+    this.addRounded(
+      TILE_W,
+      TILE_H,
+      whiteT + 0.6,
+      2.6,
+      this.bodyMaterial(COLORS.ivory),
+      0,
+      0,
+      TILE_T / 2 - whiteT / 2 - 0.3,
+      group
+    )
 
     if (faceUp) {
       this.addRounded(
@@ -406,11 +439,11 @@ export class Table3D {
           if (seat === 2 || seat === 0) {
             const x = -half + i * WALL_STEP + WALL_STEP / 2
             const z = seat === 2 ? -half : half
-            this.addRounded(WALL_LEN, WALL_H, WALL_THICK, 1.8, this.bodyMaterial('#2F7A5E'), x, y, z, this.dynamicRoot)
+            this.addRounded(WALL_LEN, WALL_H, WALL_THICK, 1.8, this.bodyMaterial('#35916D'), x, y, z, this.dynamicRoot)
           } else {
             const x = seat === 3 ? -half : half
             const z = -half + i * WALL_STEP + WALL_STEP / 2
-            this.addRounded(WALL_THICK, WALL_H, WALL_LEN, 1.8, this.bodyMaterial('#2F7A5E'), x, y, z, this.dynamicRoot)
+            this.addRounded(WALL_THICK, WALL_H, WALL_LEN, 1.8, this.bodyMaterial('#35916D'), x, y, z, this.dynamicRoot)
           }
         }
       }
@@ -431,7 +464,7 @@ export class Table3D {
       if (seat === 0) {
         // 刚摸到的牌只往右让一点，底部仍和手牌齐平（原先整只抬高 8，看着像往后缩）
         const x = startX + i * step + (i === drawnIndex ? 7 : 0)
-        this.addStandingTile(tile, x, TILE_H / 2 + 2, HAND_Z_SELF, faceUp, this.dynamicRoot, 0, i === drawnIndex)
+        this.addStandingTile(tile, x, TILE_H / 2 + 2, HAND_Z_SELF, faceUp, this.dynamicRoot, 0)
         this.recordSelfHit(tile, i, x, TILE_H / 2 + 2, HAND_Z_SELF, i === drawnIndex)
       } else if (seat === 2) {
         const x = startX + i * step
