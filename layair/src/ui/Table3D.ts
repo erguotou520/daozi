@@ -194,7 +194,7 @@ export class Table3D {
             dy /= len
             dz /= len
           }
-          verts.push(cx + dx * r, cy + dy * r, cz + dz * r, dx, dy, dz, i / seg, j / seg)
+          verts.push(cx + dx * r, cy + dy * r, cz + dz * r, dx, dy, dz, i / seg, 1 - j / seg)
         }
       }
       for (let j = 0; j < seg; j += 1) {
@@ -455,16 +455,16 @@ export class Table3D {
         let z = 0
         if (seat === 0) {
           x = 260 - cursor * flatGap
-          z = 180
+          z = 240
         } else if (seat === 2) {
           x = -260 + cursor * flatGap
-          z = -300
+          z = -260
         } else if (seat === 3) {
-          x = -260
-          z = 160 - cursor * flatGap
+          x = -560
+          z = 250 - cursor * flatGap
         } else {
-          x = 260
-          z = -160 + cursor * flatGap
+          x = 560
+          z = 250 - cursor * flatGap
         }
         this.addFlatTile(tile, x, z, this.dynamicRoot)
         cursor += 1
@@ -476,27 +476,28 @@ export class Table3D {
   private addDiscards(seat: number, tiles: Tile[]) {
     if (!tiles.length) return
     const last = this.hand?.lastPlayed
-    const maxCols = 12
+    const step = 64
+    const maxCols = seat === 0 || seat === 2 ? 8 : 7
     for (let i = 0; i < tiles.length; i += 1) {
       const tile = tiles[i]
       const col = i % maxCols
-      const row = Math.floor(i / maxCols)
+      const line = Math.floor(i / maxCols)
       let x = 0
       let z = 0
       let rotation = 0
       if (seat === 0) {
-        x = -maxCols * (FLAT_W + 4) / 2 + col * (FLAT_W + 2)
-        z = 60 - row * (FLAT_D + 2)
+        x = -maxCols * step / 2 + col * step
+        z = 70 - line * step
       } else if (seat === 2) {
-        x = maxCols * (FLAT_W + 4) / 2 - col * (FLAT_W + 2)
-        z = -210 + row * (FLAT_D + 2)
+        x = maxCols * step / 2 - col * step
+        z = -180 + line * step
       } else if (seat === 3) {
-        x = -230
-        z = -200 + col * (FLAT_W + 2)
+        x = -430 - line * 90
+        z = -100 + col * 68
         rotation = 90
       } else {
-        x = 230
-        z = 200 - col * (FLAT_W + 2)
+        x = 430 + line * 90
+        z = 100 - col * 68
         rotation = -90
       }
       const node = this.addFlatTile(tile, x, z, this.dynamicRoot, rotation)
