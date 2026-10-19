@@ -403,15 +403,34 @@ export class Table3D {
     }
   }
 
-  /** 平躺牌：弃牌、副露、最后打出的牌 */
+  /**
+   * 平躺牌：弃牌、副露、最后打出的牌。
+   * 和站立牌同一个模型——背面 30% 厚度绿 + 牌面 70% 象牙白，只是平躺、牌面朝上
+   *（绿背贴着桌面，从相机看不到，侧面能看到绿边）。
+   */
   private addFlatTile(tile: Tile, x: number, z: number, parent: Laya.Sprite3D, rotationY = 0): Laya.Sprite3D {
     const group = new Laya.Sprite3D()
     group.transform.position = new Laya.Vector3(x, 7, z)
     group.transform.rotationEuler = new Laya.Vector3(0, rotationY, 0)
     parent.addChild(group)
 
-    this.addRounded(FLAT_W, 11, FLAT_D, 3.6, this.bodyMaterial(COLORS.ivory), 0, 0, 0, group)
-    // 用竖牌面板绕 X 轴翻平，正面贴图自然朝上
+    const greenT = 11 * 0.3
+    const whiteT = 11 - greenT
+    // 绿背：贴桌面那 30%
+    this.addRounded(FLAT_W, greenT, FLAT_D, 1.6, this.bodyMaterial('#4CAF87'), 0, -11 / 2 + greenT / 2, 0, group)
+    // 白身：牌面 70%，往绿背多咬 0.4 防接缝漏光
+    this.addRounded(
+      FLAT_W,
+      whiteT + 0.4,
+      FLAT_D,
+      1.6,
+      this.bodyMaterial(COLORS.ivory),
+      0,
+      -11 / 2 + greenT + whiteT / 2 - 0.2,
+      0,
+      group
+    )
+    // 用竖牌面板绕 X 轴翻平，正面贴图自然朝上（贴在白身顶面）
     this.addRounded(
       FLAT_W - 1.5,
       FLAT_D - 1.5,
@@ -419,7 +438,7 @@ export class Table3D {
       0.8,
       this.faceMaterial(this.faceTexture(tile, true)),
       0,
-      6.4,
+      6.35,
       0,
       group,
       -90
@@ -427,8 +446,11 @@ export class Table3D {
     return group
   }
 
+  /** 牌墙：每张牌同样是「背面 30% 绿 + 牌面 70% 白」，平躺、牌背朝上，两层叠成一墩 */
   private addWall(visual: Array<Array<[boolean, boolean]>>) {
     const half = WALL_SIDE / 2
+    const greenH = WALL_H * 0.3
+    const whiteH = WALL_H - greenH
     for (let seat = 0; seat < 4; seat += 1) {
       const walls = visual[seat] ?? []
       for (let i = 0; i < STACKS; i += 1) {
@@ -439,11 +461,13 @@ export class Table3D {
           if (seat === 2 || seat === 0) {
             const x = -half + i * WALL_STEP + WALL_STEP / 2
             const z = seat === 2 ? -half : half
-            this.addRounded(WALL_LEN, WALL_H, WALL_THICK, 1.8, this.bodyMaterial('#35916D'), x, y, z, this.dynamicRoot)
+            this.addRounded(WALL_LEN, whiteH + 0.4, WALL_THICK, 1.2, this.bodyMaterial(COLORS.ivory), x, y - WALL_H / 2 + whiteH / 2 - 0.2, z, this.dynamicRoot)
+            this.addRounded(WALL_LEN, greenH, WALL_THICK, 1.2, this.bodyMaterial('#4CAF87'), x, y + WALL_H / 2 - greenH / 2, z, this.dynamicRoot)
           } else {
             const x = seat === 3 ? -half : half
             const z = -half + i * WALL_STEP + WALL_STEP / 2
-            this.addRounded(WALL_THICK, WALL_H, WALL_LEN, 1.8, this.bodyMaterial('#35916D'), x, y, z, this.dynamicRoot)
+            this.addRounded(WALL_THICK, whiteH + 0.4, WALL_LEN, 1.2, this.bodyMaterial(COLORS.ivory), x, y - WALL_H / 2 + whiteH / 2 - 0.2, z, this.dynamicRoot)
+            this.addRounded(WALL_THICK, greenH, WALL_LEN, 1.2, this.bodyMaterial('#4CAF87'), x, y + WALL_H / 2 - greenH / 2, z, this.dynamicRoot)
           }
         }
       }
