@@ -1716,17 +1716,24 @@ export class TableView {
     const bigWin = !!win?.score.bigWin.isBigWin
     const showMoneyRow = gameOver || bigWin
     const pointLines = win ? win.score.details.filter(line => gameOver || !/(元|应付)/.test(line)) : []
-    const detailCount = Math.min(pointLines.length, m.landscape ? 4 : gameOver ? 8 : 7)
+    const detailCount = Math.min(pointLines.length, this.is3D() ? 3 : m.landscape ? 4 : gameOver ? 8 : 7)
     const detailUnit = m.landscape ? 12 : 15
 
+    const side3D = this.is3D()
     const panelW = Math.round(
-      m.landscape ? Math.min(m.boardW * 0.5, this.u(300)) : Math.min(m.boardW * 0.68, this.u(380))
+      side3D
+        ? Math.min(m.boardW * 0.3, this.u(250))
+        : m.landscape
+          ? Math.min(m.boardW * 0.5, this.u(300))
+          : Math.min(m.boardW * 0.68, this.u(380))
     )
-    const px = Math.round(m.boardW / 2 - panelW / 2)
+    let px = side3D
+      ? Math.round(m.boardW - panelW - this.u(12))
+      : Math.round(m.boardW / 2 - panelW / 2)
 
     if (!win) {
       const panelH = this.u(110)
-      const py = Math.round(m.boardH / 2 - panelH / 2)
+      const py = side3D ? Math.round(m.boardY + this.u(8)) : Math.round(m.boardH / 2 - panelH / 2)
       const panel = makePanel(panelW, panelH, this.u(14), 'rgba(8,30,24,0.97)', 'rgba(217,180,95,0.4)', 1.5)
       panel.pos(px, py)
       this.content.addChild(panel)
@@ -1752,7 +1759,12 @@ export class TableView {
     const panelH = Math.round(Math.min(maxH, this.u(used)))
     const winnerSeat = win.seat
     let py = Math.round(m.boardH / 2 - panelH / 2)
-    if (m.landscape) {
+    if (side3D) {
+      // 3D：结果卡贴边放，给对家亮出的牌面让出中央
+      const sideRight = winnerSeat !== 1
+      px = sideRight ? Math.round(m.boardW - panelW - this.u(12)) : Math.round(this.u(12))
+      py = Math.round(m.boardY + this.u(8))
+    } else if (m.landscape) {
       // 横屏：面板始终夹在牌墙上方和操作条之间，四家的亮牌都不会被挡
       py = Math.round(m.ringY + Math.max(0, (maxH - panelH) / 2))
     }

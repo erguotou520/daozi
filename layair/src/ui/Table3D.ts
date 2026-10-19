@@ -33,7 +33,7 @@ const SELF_HAND_Z = TABLE_D / 2 - 90
 const WALL_SIDE = 650
 const STACKS = 17
 const WALL_STEP = WALL_SIDE / STACKS
-const WALL_LEN = WALL_STEP - 2
+const WALL_LEN = WALL_STEP - 0.8
 const WALL_THICK = 18
 const WALL_H = 11
 
@@ -71,6 +71,7 @@ export class Table3D {
   private dynamicRoot: Laya.Sprite3D
   private diceRoot: Laya.Sprite3D | null = null
   private faceCache = new Map<string, Laya.Texture2D>()
+  private roundedCache = new Map<string, Laya.Mesh>()
   private bodyCache = new Map<string, Laya.BlinnPhongMaterial>()
   private worldW: number
   private worldH: number
@@ -89,7 +90,7 @@ export class Table3D {
     this.camera.cullingMask = 0xffffffff
     this.camera.nearPlane = 1
     this.camera.farPlane = 4000
-    this.camera.fieldOfView = 37
+    this.camera.fieldOfView = 39
     this.camera.transform.position = new Laya.Vector3(0, 1120, 1200)
     this.camera.transform.rotationEuler = new Laya.Vector3(-37, 0, 0)
 
@@ -132,6 +133,107 @@ export class Table3D {
     this.addBox(70, 16, TABLE_D + 100, COLORS.woodDark, TABLE_W / 2 + 28, -4, 0, this.tableRoot)
     this.addBox(TABLE_W + 120, 10, 32, COLORS.brassDim, 0, -2, -TABLE_D / 2 - 62, this.tableRoot)
     this.addBox(TABLE_W + 120, 10, 32, COLORS.brassDim, 0, -2, TABLE_D / 2 + 62, this.tableRoot)
+  }
+
+  /** 圆角长方体网格：六个面都做圆角，牌摸起来不是刀切豆腐 */
+  private roundedMesh(w: number, h: number, d: number, radius: number): Laya.Mesh {
+    const r = Math.max(0.2, Math.min(radius, Math.min(w, h, d) / 2 - 0.01))
+    const key = `${w.toFixed(1)}x${h.toFixed(1)}x${d.toFixed(1)}x${r.toFixed(1)}`
+    const cached = this.roundedCache.get(key)
+    if (cached) return cached
+
+    const seg = 4
+    const halfX = w / 2
+    const halfY = h / 2
+    const halfZ = d / 2
+    const coreX = Math.max(0, halfX - r)
+    const coreY = Math.max(0, halfY - r)
+    const coreZ = Math.max(0, halfZ - r)
+    const verts: number[] = []
+    const idx: number[] = []
+
+    // t × b = n，保证从外面看是逆时针
+    const faces: Array<{
+      n: [number, number, number]
+      t: [number, number, number]
+      b: [number, number, number]
+      halfN: number
+      halfT: number
+      halfB: number
+    }> = [
+      { n: [0, 0, 1], t: [1, 0, 0], b: [0, 1, 0], halfN: halfZ, halfT: halfX, halfB: halfY },
+      { n: [0, 0, -1], t: [-1, 0, 0], b: [0, 1, 0], halfN: halfZ, halfT: halfX, halfB: halfY },
+      { n: [1, 0, 0], t: [0, 0, -1], b: [0, 1, 0], halfN: halfX, halfT: halfZ, halfB: halfY },
+      { n: [-1, 0, 0], t: [0, 0, 1], b: [0, 1, 0], halfN: halfX, halfT: halfZ, halfB: halfY },
+      { n: [0, 1, 0], t: [1, 0, 0], b: [0, 0, -1], halfN: halfY, halfT: halfX, halfB: halfZ },
+      { n: [0, -1, 0], t: [1, 0, 0], b: [0, 0, 1], halfN: halfY, halfT: halfX, halfB: halfZ }
+    ]
+
+    for (const face of faces) {
+      const base = verts.length / 8
+      for (let j = 0; j <= seg; j += 1) {
+        for (let i = 0; i <= seg; i += 1) {
+          const u = (i / seg) * 2 - 1
+          const v = (j / seg) * 2 - 1
+          const x = face.n[0] * face.halfN + face.t[0] * u * face.halfT + face.b[0] * v * face.halfB
+          const y = face.n[1] * face.halfN + face.t[1] * u * face.halfT + face.b[1] * v * face.halfB
+          const z = face.n[2] * face.halfN + face.t[2] * u * face.halfT + face.b[2] * v * face.halfB
+          const cx = Math.max(-coreX, Math.min(coreX, x))
+          const cy = Math.max(-coreY, Math.min(coreY, y))
+          const cz = Math.max(-coreZ, Math.min(coreZ, z))
+          let dx = x - cx
+          let dy = y - cy
+          let dz = z - cz
+          let len = Math.sqrt(dx * dx + dy * dy + dz * dz)
+          if (len < 0.00001) {
+            dx = face.n[0]
+            dy = face.n[1]
+            dz = face.n[2]
+          } else {
+            dx /= len
+            dy /= len
+            dz /= len
+          }
+          verts.push(cx + dx * r, cy + dy * r, cz + dz * r, dx, dy, dz, i / seg, j / seg)
+        }
+      }
+      for (let j = 0; j < seg; j += 1) {
+        for (let i = 0; i < seg; i += 1) {
+          const a = base + j * (seg + 1) + i
+          const b = a + 1
+          const c = a + seg + 2
+          const d = a + seg + 1
+          idx.push(a, b, c, a, c, d)
+        }
+      }
+    }
+
+    const declaration = Laya.VertexMesh.getVertexDeclaration('POSITION,NORMAL,UV')
+    const mesh = Laya.PrimitiveMesh._createMesh(declaration, new Float32Array(verts), new Uint16Array(idx))
+    mesh.calculateBounds()
+    this.roundedCache.set(key, mesh)
+    return mesh
+  }
+
+  private addRounded(
+    w: number,
+    h: number,
+    d: number,
+    radius: number,
+    material: Laya.Material,
+    x: number,
+    y: number,
+    z: number,
+    parent: Laya.Sprite3D,
+    rotX = 0,
+    rotY = 0
+  ): Laya.MeshSprite3D {
+    const node = new Laya.MeshSprite3D(this.roundedMesh(w, h, d, radius))
+    node.meshRenderer.sharedMaterial = material
+    node.transform.position = new Laya.Vector3(x, y, z)
+    node.transform.rotationEuler = new Laya.Vector3(rotX, rotY, 0)
+    parent.addChild(node)
+    return node
   }
 
   private addBox(
@@ -192,13 +294,10 @@ export class Table3D {
       ctx.fillRect(3, 3, w - 6, h - 6)
     }
 
-    // 黑缝 + 牌面描边
-    ctx.strokeStyle = '#06100C'
-    ctx.lineWidth = 5
-    ctx.strokeRect(2.5, 2.5, w - 5, h - 5)
-    ctx.strokeStyle = 'rgba(143,120,82,0.62)'
-    ctx.lineWidth = 2
-    ctx.strokeRect(7, flat ? 7 : 35, w - 14, h - (flat ? 14 : 43))
+    // 不再画黑框：牌与牌之间靠 3D 间隙和圆角分隔
+    ctx.strokeStyle = 'rgba(143,120,82,0.32)'
+    ctx.lineWidth = 1.5
+    ctx.strokeRect(5.5, flat ? 5.5 : 33.5, w - 11, h - (flat ? 11 : 39))
 
     const honor = tile.length === 1 && HONOR_COLOR[tile] !== undefined
     const suit = honor ? '字' : tile.charAt(1)
@@ -241,25 +340,34 @@ export class Table3D {
     parent.addChild(group)
 
     const bodyColor = faceUp ? '#2F7A5E' : '#2F7A5E'
-    const body = new Laya.MeshSprite3D(Laya.PrimitiveMesh.createBox(TILE_W, TILE_H, TILE_T))
-    body.meshRenderer.sharedMaterial = this.bodyMaterial(bodyColor)
-    group.addChild(body)
+    this.addRounded(TILE_W, TILE_H, TILE_T, 4.5, this.bodyMaterial(bodyColor), 0, 0, 0, group)
 
     if (faceUp) {
-      const face = new Laya.MeshSprite3D(Laya.PrimitiveMesh.createBox(TILE_W - 3, TILE_H - 3, 1.6))
-      face.transform.position = new Laya.Vector3(0, 0, TILE_T / 2 + 0.8)
-      face.meshRenderer.sharedMaterial = this.faceMaterial(this.faceTexture(tile, false))
-      group.addChild(face)
+      this.addRounded(
+        TILE_W - 3.5,
+        TILE_H - 3.5,
+        1.7,
+        0.85,
+        this.faceMaterial(this.faceTexture(tile, false)),
+        0,
+        0,
+        TILE_T / 2 + 0.9,
+        group
+      )
     } else {
       // 牌背：白顶 + 绿色牌背，牌背朝相机
-      const top = new Laya.MeshSprite3D(Laya.PrimitiveMesh.createBox(TILE_W, 3, TILE_T))
-      top.transform.position = new Laya.Vector3(0, TILE_H / 2 - 1.5, 0)
-      top.meshRenderer.sharedMaterial = this.bodyMaterial(COLORS.ivory)
-      group.addChild(top)
-      const back = new Laya.MeshSprite3D(Laya.PrimitiveMesh.createBox(TILE_W - 3, TILE_H - 8, 2))
-      back.transform.position = new Laya.Vector3(0, -2, TILE_T / 2 + 0.7)
-      back.meshRenderer.sharedMaterial = this.bodyMaterial('#3C9374')
-      group.addChild(back)
+      this.addRounded(TILE_W, 3, TILE_T, 1.2, this.bodyMaterial(COLORS.ivory), 0, TILE_H / 2 - 1.5, 0, group)
+      this.addRounded(
+        TILE_W - 3.5,
+        TILE_H - 8,
+        1.7,
+        0.85,
+        this.bodyMaterial('#3C9374'),
+        0,
+        -2,
+        TILE_T / 2 + 0.8,
+        group
+      )
     }
   }
 
@@ -270,14 +378,20 @@ export class Table3D {
     group.transform.rotationEuler = new Laya.Vector3(0, rotationY, 0)
     parent.addChild(group)
 
-    const body = new Laya.MeshSprite3D(Laya.PrimitiveMesh.createBox(FLAT_W, 11, FLAT_D))
-    body.meshRenderer.sharedMaterial = this.bodyMaterial(COLORS.ivory)
-    group.addChild(body)
-
-    const face = new Laya.MeshSprite3D(Laya.PrimitiveMesh.createBox(FLAT_W - 2, 1.6, FLAT_D - 2))
-    face.transform.position = new Laya.Vector3(0, 6.2, 0)
-    face.meshRenderer.sharedMaterial = this.faceMaterial(this.faceTexture(tile, true))
-    group.addChild(face)
+    this.addRounded(FLAT_W, 11, FLAT_D, 3.6, this.bodyMaterial(COLORS.ivory), 0, 0, 0, group)
+    // 用竖牌面板绕 X 轴翻平，正面贴图自然朝上
+    this.addRounded(
+      FLAT_W - 3,
+      FLAT_D - 3,
+      1.7,
+      0.8,
+      this.faceMaterial(this.faceTexture(tile, true)),
+      0,
+      6.4,
+      0,
+      group,
+      -90
+    )
     return group
   }
 
@@ -293,11 +407,11 @@ export class Table3D {
           if (seat === 2 || seat === 0) {
             const x = -half + i * WALL_STEP + WALL_STEP / 2
             const z = seat === 2 ? -half : half
-            this.addBox(WALL_LEN, WALL_H, WALL_THICK, '#2F7A5E', x, y, z, this.dynamicRoot)
+            this.addRounded(WALL_LEN, WALL_H, WALL_THICK, 1.8, this.bodyMaterial('#2F7A5E'), x, y, z, this.dynamicRoot)
           } else {
             const x = seat === 3 ? -half : half
             const z = -half + i * WALL_STEP + WALL_STEP / 2
-            this.addBox(WALL_THICK, WALL_H, WALL_LEN, '#2F7A5E', x, y, z, this.dynamicRoot)
+            this.addRounded(WALL_THICK, WALL_H, WALL_LEN, 1.8, this.bodyMaterial('#2F7A5E'), x, y, z, this.dynamicRoot)
           }
         }
       }
@@ -311,7 +425,7 @@ export class Table3D {
     drawnIndex = -1
   ) {
     if (!tiles.length) return
-    const step = Math.min(66, 900 / Math.max(1, tiles.length))
+    const step = Math.min(TILE_W + 2, 940 / Math.max(1, tiles.length))
     const startX = -((tiles.length - 1) * step) / 2
     for (let i = 0; i < tiles.length; i += 1) {
       const tile = tiles[i]
@@ -332,7 +446,7 @@ export class Table3D {
 
   private addMelds(seat: number, player: HandState['players'][number]) {
     if (!player.melds.length) return
-    const flatGap = FLAT_W + 3
+    const flatGap = FLAT_W + 1.6
     let cursor = 0
     for (const meld of player.melds) {
       const tiles = meldTiles(meld)
@@ -371,18 +485,18 @@ export class Table3D {
       let z = 0
       let rotation = 0
       if (seat === 0) {
-        x = -maxCols * (FLAT_W + 4) / 2 + col * (FLAT_W + 4)
-        z = 120 - row * (FLAT_D + 4)
+        x = -maxCols * (FLAT_W + 4) / 2 + col * (FLAT_W + 2)
+        z = 60 - row * (FLAT_D + 2)
       } else if (seat === 2) {
-        x = maxCols * (FLAT_W + 4) / 2 - col * (FLAT_W + 4)
-        z = -210 + row * (FLAT_D + 4)
+        x = maxCols * (FLAT_W + 4) / 2 - col * (FLAT_W + 2)
+        z = -210 + row * (FLAT_D + 2)
       } else if (seat === 3) {
         x = -230
-        z = -200 + col * (FLAT_W + 4)
+        z = -200 + col * (FLAT_W + 2)
         rotation = 90
       } else {
         x = 230
-        z = 200 - col * (FLAT_W + 4)
+        z = 200 - col * (FLAT_W + 2)
         rotation = -90
       }
       const node = this.addFlatTile(tile, x, z, this.dynamicRoot, rotation)
