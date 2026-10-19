@@ -160,6 +160,8 @@ export interface Rules {
   zhiziIncludesMelds: boolean
   /** 老小对：同花色同时有对 1 和对 9（可含碰/杠）（用户确认） */
   laoXiaoDuiEnabled: boolean
+  /** 双连号逢2加1：≥2 门小连号时每 2 门加 1 门小连号的分（用户确认） */
+  doubleRunBonusEnabled: boolean
 }
 
 export const DEFAULT_RULES: Rules = {
@@ -212,7 +214,8 @@ export const DEFAULT_RULES: Rules = {
   kuZhiYaMozi: { deal: 1.5, selfDraw: 3 },
   qingShuiMozi: 1.5,
   zhiziIncludesMelds: true,
-  laoXiaoDuiEnabled: true
+  laoXiaoDuiEnabled: true,
+  doubleRunBonusEnabled: true
 }
 
 /** 结算范围内的成牌上下文 */
@@ -493,18 +496,23 @@ function analyze(input: ScoreInput, rules: Rules): HandAnalysis {
   const numberSuitsInHand = new Set<NumberSuit>()
 
   for (const suit of NUMBER_SUITS) {
-    const ranks = new Set<number>()
-    for (const [tile, n] of counts) {
-      const info = parseTile(tile)
-      if (info.suit !== suit || n <= 0) continue
-      ranks.add(info.rank)
-      numberSuitsInHand.add(suit)
-    }
-    if (!ranks.size) continue
+    // 这一门整手（含副露）有没有牌——清一色/草一色按整手算
+    const present = [...counts.keys()].some(tile => parseTile(tile).suit === suit)
+    if (present) numberSuitsInHand.add(suit)
 
     if (suitCounts[suit] >= rules.zhizi.min) {
       zhiziPoints[suit] = Math.min(suitCounts[suit] - (rules.zhizi.min - 1), rules.zhizi.max)
     }
+
+    // 连号只看**手上**的牌：副露已经亮在桌上，不参与「连续六张」。
+    // 否则 234456 + 碰 7 万 会被拼成 2–7，看着像连号，其实手上根本没有六连。
+    const ranks = new Set<number>()
+    for (const [tile, n] of concealedCounts) {
+      const info = parseTile(tile)
+      if (info.suit !== suit || n <= 0) continue
+      ranks.add(info.rank)
+    }
+    if (!ranks.size) continue
 
     const allNine = suitTiles(suit).every(tile => ranks.has(parseTile(tile).rank))
     if (allNine) bigRuns.push(suit)
@@ -716,6 +724,20 @@ export function scoreHand(input: ScoreInput): ScoreResult {
   }
   for (const suit of a.smallRuns) {
     items.push({ name: '小连号', points: rules.patternPoints.小连号, count: 1, detail: `${suit} 连续六张` })
+  }
+
+  // 双连号：≥2 门小连号时「逢2加1」——每 2 门小连号多计 1 门小连号的分（用户确认）
+  // 例：两门小连号 = 2×5 + 5 = 15 点；典型双连号把总点数抬到 24（底4 + 不动手5 + 15），
+  // 有压当或 8 只再 +1 到 25；成牌张是字牌（无压当）则停在 24。
+  if (rules.doubleRunBonusEnabled && enabled('双连号') && a.smallRuns.length >= 2) {
+    const bonusUnits = Math.floor(a.smallRuns.length / 2)
+    patterns['双连号'] = true
+    items.push({
+      name: '双连号',
+      points: bonusUnits * rules.patternPoints.小连号,
+      count: bonusUnits,
+      detail: `${a.smallRuns.join('、')} 共 ${a.smallRuns.length} 门小连号，逢2加1 ×${bonusUnits}`
+    })
   }
 
   // 棒棒

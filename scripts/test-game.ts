@@ -15,10 +15,13 @@ import {
   legalDiscards,
   remainingTiles,
   settleHand,
+  takeWallTile,
+  wallVisualOf,
   type HandState,
   type RoundAction
 } from '../src/game/game'
 import { applyHandSettlement, createMatch, endHand, startHand, type MatchState } from '../src/game/match'
+import { dealTrace } from '../src/game/table'
 import { scoreHand, type HandSettlement, type Tile } from '../src/game/score'
 
 let failures = 0
@@ -60,6 +63,62 @@ console.log('='.repeat(72))
   check('闲家各 13 张', [0, 1, 2].map(seat => state.players[seat].hand.length).join(','), '13,13,13')
   check('牌墙剩 136-53=83 张', remainingTiles(state), 83)
   check('开局阶段是选缺门', state.phase, 'choose-shortage')
+
+  // 牌墙是一条连续的牌：从座位 3 那段抓起，抓完接左手边（座位 2）那段
+  const remainingPerWall = [0, 1, 2, 3].map(seat => state.piles[seat].length)
+  check('留墩 4 张留在开牌墙、下一面墙吃 23 张、另两面未动', remainingPerWall.join(','), '34,34,11,4')
+  const openingWall = wallVisualOf(state, 3)
+  check('开牌墙（座位 3）只剩最右的留墩 2 墩', openingWall.flat().filter(Boolean).length, 4)
+  check(
+    '留墩就压在牌墙最右端（左边 15 墩全空）',
+    openingWall.every(([top, bottom], col) => (col >= 15 ? top && bottom : !top && !bottom)),
+    true
+  )
+  // 座位 2 那面墙被抓走 23 张：11 墩整 + 1 墩上层，从右往左，没有任何中段空档
+  const nextWall = wallVisualOf(state, 2)
+  check('座位 2 那面墙还剩 11 张', nextWall.flat().filter(Boolean).length, 11)
+  check(
+    '座位 2 那面墙：5 墩整 + 1 道半墩 + 11 墩整',
+    nextWall.map(([top, bottom]) => `${top ? 'o' : '_'}${bottom ? 'o' : '_'}`).join(''),
+    `${'oo'.repeat(5)}${'_o'}${'__'.repeat(11)}`
+  )
+}
+
+// 跳墩摸牌：摸牌时可以隔 1 墩取，被跳过的那两张留在墙上
+{
+  const state = createHand({ diceA: 2, diceB: 6, seed: 11 })
+  // 开牌墙发完只剩留墩，跳墩摸牌落到下一面还没动过的墙（顺时针）
+  const from = (state.wallSeat - 1 + 4) % 4
+  const skipped = [state.piles[from][0], state.piles[from][1]]
+  const target = state.piles[from][2]
+  const got = takeWallTile(state, from, 2)
+  check('跳墩摸牌：摸的是第 2 墩', got, target)
+  check('跳墩摸牌：被跳过那两张还留在墙上', [state.piles[from][0], state.piles[from][1]].join(','), skipped.join(','))
+}
+
+// 发牌动画和引擎发牌必须是同一套顺序：四面墙各少多少张要完全对上
+{
+  const cases: Array<[number, number, string]> = [
+    [1, 4, '5 点 → 自己坐东'],
+    [1, 5, '6 点 → 下家坐东'],
+    [2, 5, '7 点 → 对面坐东'],
+    [3, 5, '8 点 → 上家坐东']
+  ]
+  for (const [diceA, diceB, label] of cases) {
+    const state = createHand({ diceA, diceB, seed: 3 })
+    const trace = dealTrace(state.dealerSeat, state.wallSeat, state.breakStacks)
+    // 牌墙是一条连续的牌：开牌墙先扣掉留墩，接着顺时针吃下一段，另两面还没动
+    const order = [0, 1, 2, 3].map(i => (state.wallSeat - i + 4) % 4)
+    const kept = state.breakStacks * 2
+    const expectedArr = [0, 0, 0, 0]
+    expectedArr[order[0]] = kept
+    expectedArr[order[1]] = 15 - kept
+    expectedArr[order[2]] = 34
+    expectedArr[order[3]] = 34
+    const actual = [0, 1, 2, 3].map(seat => state.piles[seat].length).join(',')
+    check(`${label}：牌墙按一条连续队列消耗`, actual, expectedArr.join(','))
+    check(`${label}：动画抓牌张数 = 53`, trace.length, 53)
+  }
 }
 
 /* ------------------------------------------------------------------ */
@@ -119,13 +178,13 @@ console.log('='.repeat(72))
     ['1条', '1条', '2条', '2条', '3条', '3条', '4条', '4条', '5条', '5条', '6条', '6条', '7条'],
     ['1筒', '1筒', '2筒', '2筒', '3筒', '3筒', '4筒', '4筒', '6筒', '6筒', '7筒', '7筒', '8筒']
   ]
-  const piles: Tile[][] = [['9筒'], ['1条'], ['1条'], ['8筒']]
+  const piles: Tile[][] = [['9筒'], ['8筒'], ['1条'], ['1条']]
   let state = ready(hands, piles, ['万', '条', '万', '条'])
   state = applyAction(state, { type: 'draw', seat: 0 })
   state = applyAction(state, { type: 'discard', seat: 0, tile: '5筒' })
   state = applyAction(state, { type: 'claim', seat: 1, claim: '杠' })
   check('杠后手牌 13-3+1=11 张', state.players[1].hand.length, 11)
-  check('杠从牌尾补到 8筒', state.players[1].hand.includes('8筒'), true)
+  check('杠从牌墙尾巴补牌（留墩那一头）', state.players[1].hand.includes('8筒'), true)
   check('标记为杠后', state.afterKong, true)
   check('杠后轮到座位 1 打牌', `${state.phase}/${state.turn}`, 'discard/1')
 }
@@ -161,6 +220,10 @@ console.log('='.repeat(72))
   check('点数变化（0 号位 +102）', settlement?.pointDelta.join(','), '102,-34,-34,-34')
   check('金额变化（0 号位 +81）', settlement?.moneyDelta.join(','), '81,-27,-27,-27')
   check('本局还没结束', settlement?.gameOver, false)
+  // 一把的进出必须配平：点数可能被「付完为止」截断，但金额不能凭空多出来
+  const sum = (list: number[]) => Number(list.reduce((a, b) => a + b, 0).toFixed(1))
+  check('金额四家合计为 0', sum(settlement?.moneyDelta ?? []), 0)
+  check('点数四家合计为 0', sum(settlement?.pointDelta ?? []), 0)
 }
 
 /* ------------------------------------------------------------------ */
@@ -385,7 +448,10 @@ const fakeSettlement = (winnerSeat: number): HandSettlement => {
   check('本局继续（没人被付完）', match.roundIndex, 1)
   check('本局已打 1 把', match.hands, 1)
   check('本局金额记录', match.money.join(','), '81,-27,-27,-27')
-  check('第二把不再是首牌', startHand(match, 1, 4, { hands, piles }).current?.isFirstHand, false)
+  const second = startHand(match, 1, 4, { hands, piles })
+  check('第二把不再是首牌', second.current?.isFirstHand, false)
+  // 点数要一把一把往下滚，第二把开局带的是上把结算后的点数
+  check('第二把带着上把之后的点数开局', second.current?.players[0].points, 152)
 
   // 有人点数被付完 → 本局结束、下一局恢复 50 点
   let after = applyHandSettlement({ ...createMatch(), hands: 1 }, fakeSettlement(0))
@@ -405,10 +471,16 @@ const fakeSettlement = (winnerSeat: number): HandSettlement => {
   }
   check('打满 4 局缺少调圈骰子 → 报错', threw, true)
 
-  const circled = applyHandSettlement({ ...createMatch(), roundIndex: 4 }, fakeSettlement(2), 7)
-  check('调圈后回到第 1 局', circled.roundIndex, 1)
+  const circled = applyHandSettlement({ ...createMatch(), roundIndex: 4 }, fakeSettlement(2), { circleDiceSum: 7 })
+  check('调圈后局数继续往上加（第 5 局）', circled.roundIndex, 5)
   check('调圈：骰子指向的座位 0 不动', circled.seats[0], 0)
   check('调圈：座位重排', circled.seats.join(','), '0,3,1,2')
+
+  // 单人演示不调圈：座位不动，局数照样往上加
+  const fixed = applyHandSettlement({ ...createMatch(), roundIndex: 4 }, fakeSettlement(2), { rotate: false })
+  check('不调圈：座位不动', fixed.seats.join(','), '0,1,2,3')
+  check('不调圈：局数照样 +1', fixed.roundIndex, 5)
+  check('不调圈：累计金额照记', fixed.totalMoney.join(','), '135,-45,-45,-45')
 }
 
 /* ------------------------------------------------------------------ */

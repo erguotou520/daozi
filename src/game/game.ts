@@ -89,7 +89,7 @@ export interface HandState {
   bans: DaLiaoCheBan[]
   /** 最近一次「打出禁打牌」的违规记录（成牌时算点炮） */
   banViolation: { seat: number; tile: Tile } | null
-  winner: { seat: number; selfDraw: boolean; score: ScoreResult } | null
+  winner: { seat: number; selfDraw: boolean; score: ScoreResult; winTile: Tile | null } | null
   /** 大吊车禁打点炮：由这一家独自承担三家 */
   singlePayerSeat: number | null
   result: 'win' | 'exhausted' | null
@@ -171,32 +171,40 @@ function removeTiles(deck: Tile[], used: Tile[]): Tile[] {
 
 type WallEntry = { col: number; layer: number }
 
-/** 一段牌墙按"先上层、再下层"排成摸牌顺序，同时记下每张牌属于哪一墩哪一层 */
+/**
+ * 一段牌墙排成摸牌顺序：**一墩一墩地抓，每墩先上层再下层**。
+ * 所以顺序是「1墩上、1墩下、2墩上、2墩下……」——不是把整面墙的上层先抓完。
+ *
+ * **方向：从右往左**（墩号 16 → 0）。牌桌上的牌墙是从自己牌面右边开始、
+ * 一墩一墩往左抓的；顺时针绕一圈，所以每段墙的抓牌端都是它的「右端」
+ * （竖着的两面墙就是下端）。墩号只表示画在哪儿，抓牌顺序由这里决定。
+ */
 function buildWallSide(raw: Tile[]): { pile: Tile[]; meta: WallEntry[] } {
-  const top = raw.slice(0, STACKS_PER_WALL)
-  const bottom = raw.slice(STACKS_PER_WALL)
-  return {
-    pile: [...top, ...bottom],
-    meta: [
-      ...top.map((_, col) => ({ col, layer: 0 })),
-      ...bottom.map((_, col) => ({ col, layer: 1 }))
-    ]
+  const pile: Tile[] = []
+  const meta: WallEntry[] = []
+  for (let col = STACKS_PER_WALL - 1; col >= 0; col -= 1) {
+    const top = raw[col]
+    const bottom = raw[col + STACKS_PER_WALL]
+    if (top !== undefined) {
+      pile.push(top)
+      meta.push({ col, layer: 0 })
+    }
+    if (bottom !== undefined) {
+      pile.push(bottom)
+      meta.push({ col, layer: 1 })
+    }
   }
+  return { pile, meta }
 }
 
-/** 留墩：这 k 墩两层都留到最后才轮到 */
-function rotateKeep<T>(list: T[], breakStacks: number): T[] {
-  const top = list.slice(0, STACKS_PER_WALL)
-  const bottom = list.slice(STACKS_PER_WALL)
-  return [
-    ...top.slice(breakStacks),
-    ...bottom.slice(breakStacks),
-    ...top.slice(0, breakStacks),
-    ...bottom.slice(0, breakStacks)
-  ]
-}
-
-function buildWall(deck: Tile[], wallSeat: number, breakStacks: number) {
+/**
+ * 四面墙各 17 墩 34 张，排成摸牌顺序；四段首尾相接就是整条牌墙。
+ *
+ * 每段墙都是**从右往左**排（墩号 16 → 0），所以数组开头就是抓牌端。
+ * 开牌那面墙最右的几摞是**留墩**：它们留在数组开头不动，抓牌时跳过，
+ * 等整圈抓完才轮到（见 `takeWallTile`）——墙上任何时刻都不会中段空档。
+ */
+function buildWall(deck: Tile[]) {
   const piles: Tile[][] = []
   const meta: WallEntry[][] = []
   for (let seat = 0; seat < SEAT_COUNT; seat += 1) {
@@ -205,20 +213,18 @@ function buildWall(deck: Tile[], wallSeat: number, breakStacks: number) {
     piles.push(side.pile)
     meta.push(side.meta)
   }
-  if (breakStacks > 0) {
-    piles[wallSeat] = rotateKeep(piles[wallSeat], breakStacks)
-    meta[wallSeat] = rotateKeep(meta[wallSeat], breakStacks)
-  }
+  // 留墩就摆在开牌墙的最右端（数组开头），但**不先抓**——takeWallTile 会跳过它们，
+  // 等整圈抓完才轮到（见 takeWallTile 的 kept 偏移）。
+  // 四面墙只是同一圈牌的四段：抓牌从开牌墙那段抓起，抓完接着下一段，
+  // 所以整圈只在「已经抓到哪儿」这一个地方变短，不会四面各缺一段。
   return { piles, meta }
 }
 
-/** 外部直接给牌墙时，按同样的"先上层再下层"规则补出 meta */
+/** 外部直接给牌墙时，按同样的「一墩上下交替」规则补出 meta */
 function metaForPile(pile: Tile[]): WallEntry[] {
   const entries: WallEntry[] = []
-  const topCount = Math.min(pile.length, STACKS_PER_WALL)
-  for (let col = 0; col < topCount; col += 1) entries.push({ col, layer: 0 })
-  for (let index = STACKS_PER_WALL; index < pile.length; index += 1) {
-    entries.push({ col: index - STACKS_PER_WALL, layer: 1 })
+  for (let index = 0; index < pile.length; index += 1) {
+    entries.push({ col: Math.floor(index / 2), layer: index % 2 })
   }
   return entries
 }
@@ -277,18 +283,23 @@ export function createHand(options: CreateHandOptions): HandState {
     if (options.piles) {
       state.piles = options.piles.map(pile => [...pile])
       state.pileMeta = state.piles.map(metaForPile)
+      // 外部直接摆好的牌墙就是全部可抓的牌，没有留墩
+      state.breakStacks = 0
     } else {
-      const wall = buildWall(removeTiles(createDeck(), options.hands.flat()), opening.wallSeat, opening.breakStacks)
+      const wall = buildWall(removeTiles(createDeck(), options.hands.flat()))
       state.piles = wall.piles
       state.pileMeta = wall.meta
     }
   } else {
-    const wall = buildWall(deck, opening.wallSeat, opening.breakStacks)
+    const wall = buildWall(deck)
     state.piles = wall.piles
     state.pileMeta = wall.meta
     for (const step of dealPlan(opening.dealerSeat)) {
       for (let i = 0; i < step.count; i += 1) {
-        const tile = takeWallTile(state)
+        // 牌墙是一条连续的牌：谁抓都从墙头取，抓完接着往下走。
+        // 庄家跳牌时这一手先跳过一张再取（跳过的那张留在墙上）。
+        const skip = i === 0 ? (step.skip ?? 0) : 0
+        const tile = takeWallTile(state, step.seat, skip)
         if (!tile) throw new Error('发牌时牌墙已空')
         state.players[step.seat].hand.push(tile)
       }
@@ -301,29 +312,45 @@ export function createHand(options: CreateHandOptions): HandState {
   return state
 }
 
-/** 正常摸牌：从开牌处接续，摸空一面墙就轮到下一家 */
-export function takeWallTile(state: HandState): Tile | null {
-  for (let pass = 0; pass < SEAT_COUNT; pass += 1) {
-    const seat = state.drawSeat
-    const pile = state.piles[seat]
-    if (pile.length) {
-      const tile = pile.shift() as Tile
-      state.pileMeta[seat].shift()
-      if (!pile.length) state.drawSeat = (seat + 1) % SEAT_COUNT
+/**
+ * 摸牌：牌墙是**一条连续的牌**，从骰子定的开牌墙开始，顺时针绕桌子一圈往下抓。
+ *
+ * 方向是**顺时针**：自己这面墙从右往左抓，抓到头接左手边那面（上家），
+ * 再往上是对面、右手边（下家），最后绕回自己这面墙的留墩。
+ * 发牌和打牌用的是同一条队列，所以墙上只会在「已经抓到哪儿」这一个地方出现空档，
+ * 不会四面墙各缺一段。
+ *
+ * @param seat 摸牌的人（只影响日志，牌一律从墙头取）
+ * @param skip 先跳过几张再取（庄家跳牌用）。被跳过的那张留在墙头，
+ *             下一次摸牌就会摸到它——牌桌上因此会留一个缺口。
+ */
+export function takeWallTile(state: HandState, seat = state.turn, skip = 0): Tile | null {
+  void seat
+  // 留墩：整圈还没抓完之前先跳过开牌墙最右那几摞，等别的都抓光了才轮到它们
+  const keptTotal = Math.min(state.breakStacks * 2, TILES_PER_SEAT_WALL - 2)
+  const remaining = state.piles.reduce((sum, pile) => sum + pile.length, 0)
+  const keepAside = remaining > keptTotal ? keptTotal : 0
+  for (let step = 0; step < SEAT_COUNT; step += 1) {
+    const from = (state.wallSeat - step + SEAT_COUNT) % SEAT_COUNT
+    const pile = state.piles[from]
+    const offset = skip + (from === state.wallSeat ? keepAside : 0)
+    if (pile.length > offset) {
+      const tile = pile.splice(offset, 1)[0] as Tile
+      state.pileMeta[from].splice(offset, 1)
       return tile
     }
-    state.drawSeat = (seat + 1) % SEAT_COUNT
   }
   return null
 }
 
-/** 杠后补牌：从牌尾摸 */
-export function takeTailTile(state: HandState): Tile | null {
-  for (let step = SEAT_COUNT - 1; step >= 0; step -= 1) {
-    const seat = (state.wallSeat + step) % SEAT_COUNT
-    const pile = state.piles[seat]
+/** 杠后补牌：从牌墙的最尾巴摸（也就是这一圈最后才会轮到的那几张，即留墩） */
+export function takeTailTile(state: HandState, seat = state.turn): Tile | null {
+  void seat
+  for (let step = 0; step < SEAT_COUNT; step += 1) {
+    const from = (state.wallSeat + 1 + step) % SEAT_COUNT
+    const pile = state.piles[from]
     if (pile.length) {
-      state.pileMeta[seat].pop()
+      state.pileMeta[from].pop()
       return pile.pop() as Tile
     }
   }
@@ -532,6 +559,13 @@ export function applyAction(state: HandState, action: RoundAction): HandState {
 
   if (action.type === 'draw') {
     if (next.phase !== 'draw' || next.turn !== action.seat) throw new Error('当前不能摸牌')
+    // 东家首巡：发牌时已经多拿一张（3n+2），这一巡不摸牌，直接出牌。
+    // 以前这里照常摸一张，东家就变成 15 张的大相公，永远成不了牌。
+    if (player.hand.length % 3 === 2 && !next.drawnTile) {
+      next.phase = 'discard'
+      next.logs.push(`${action.seat} 号位（东家）首巡直接出牌`)
+      return next
+    }
     const tile = takeWallTile(next)
     if (!tile) {
       next.phase = 'over'
@@ -725,7 +759,7 @@ function resolveWin(
     singlePayer
   })
 
-  state.winner = { seat, selfDraw, score }
+  state.winner = { seat, selfDraw, score, winTile }
   state.singlePayerSeat = singlePayer ? discardSeat : null
   state.phase = 'over'
   state.result = 'win'
@@ -792,7 +826,30 @@ export function settleHand(state: HandState): HandSettlement | null {
 
 /* ------------------------------------------------------------------ *
  * 简易 AI（确定性，便于复现）
+ * 出牌启发式：优先清缺门；之后留搭子（对子、相邻张），先弃孤张、
+ * 单张字牌、边张。能碰就碰（副露加点、加快成牌）。
  * ------------------------------------------------------------------ */
+
+/** 一张牌留在手里的价值：越低越该打出去 */
+function keepValue(hand: Tile[], tile: Tile): number {
+  const info = parseTile(tile)
+  const rest = [...hand]
+  rest.splice(rest.indexOf(tile), 1)
+  const copies = rest.filter(item => item === tile).length
+
+  if (info.suit === '字') {
+    // 字牌：有搭（对子以上）才留，孤张字牌最没价值
+    return copies * 5
+  }
+
+  const ranks = rest
+    .filter(item => parseTile(item).suit === info.suit)
+    .map(item => parseTile(item).rank)
+  const nearest = ranks.length ? Math.min(...ranks.map(rank => Math.abs(rank - info.rank))) : 9
+  // 对子/刻子潜质 + 靠张潜质；中张（4-6）更容易进顺子
+  const middleBonus = info.rank >= 4 && info.rank <= 6 ? 0.5 : 0
+  return copies * 4 + (nearest === 0 ? 0 : nearest === 1 ? 2.5 : nearest === 2 ? 1 : 0) + middleBonus
+}
 
 export function chooseAIAction(state: HandState, seat: number): RoundAction | null {
   const actions = legalActions(state, seat)
@@ -808,9 +865,11 @@ export function chooseAIAction(state: HandState, seat: number): RoundAction | nu
   if (state.phase === 'claim') {
     const win = actions.find(action => action.type === 'claim' && action.claim === '成')
     if (win) return win
-    // 简单策略：能杠就杠，能碰且手里还有缺门牌就先碰（方便清缺门），否则过
+    // 简单策略：能杠就杠，能碰就碰（副露记点、加快成牌），否则过
     const kong = actions.find(action => action.type === 'claim' && action.claim === '杠')
     if (kong) return kong
+    const peng = actions.find(action => action.type === 'claim' && action.claim === '碰')
+    if (peng) return peng
     return { type: 'pass', seat }
   }
   if (state.phase === 'discard') {
@@ -822,7 +881,12 @@ export function chooseAIAction(state: HandState, seat: number): RoundAction | nu
     if (!discards.length) return null
     const shortage = shortageTiles(player)
     const pool = shortage.length ? discards.filter(action => isShortageTile(player, action.tile)) : discards
-    return (pool.length ? pool : discards)[0]
+    const candidates = pool.length ? pool : discards
+    // 剩一张时没得选；多张时留价值最低的打出去（确定性：同分取先）
+    if (candidates.length === 1) return candidates[0]
+    return candidates.reduce((best, action) =>
+      keepValue(player.hand, action.tile) < keepValue(player.hand, best.tile) ? action : best
+    )
   }
   return null
 }

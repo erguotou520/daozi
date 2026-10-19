@@ -65,11 +65,28 @@ export function dealOrder(dealerSeat: number): number[] {
 export interface DealStep {
   seat: number
   count: number
+  /**
+   * 抓牌前先跳过的牌数（庄家跳牌用，按「张」算）。
+   * 被跳过的牌留在墙上，之后照常被摸到——所以墙上会留一个看得见的缺口。
+   */
+  skip?: number
 }
 
+/** 一面墙的墩数：17 墩 × 上下两层 */
+export const STACKS_PER_SIDE = 17
+/** 一面墙的牌数 */
+export const TILES_PER_SIDE = STACKS_PER_SIDE * 2
+
 /**
- * 发牌计划：3 轮 × 每人 4 张，再每人 1 张，最后东家补 1 张。
- * 一共 53 张，东家 14 张、其余各家 13 张。
+ * 发牌计划：谁、第几手拿几张。牌一律从同一条牌墙的墙头连续取。
+ *
+ * 1. 3 轮 × 每人 4 张（一次抓 2 摞），从东家起；
+ * 2. 庄家跳牌：先抓 1 张，跳过下面那张、直接拿下一墩的上层（凑到 14 张）；
+ * 3. 其余三家各补 1 张，凑到 13 张。
+ *
+ * 一共 53 张，从开牌墙那段开始一路抓下去，抓完这段接下一段——
+ * 所以整圈牌墙只在「抓到哪儿」这一个地方变短，不是四面各缺一段。
+ * 第 2 步跳过的那张留在墙上，之后摸牌摸到那里时才会被摸走。
  */
 export function dealPlan(dealerSeat: number): DealStep[] {
   const order = dealOrder(dealerSeat)
@@ -77,9 +94,60 @@ export function dealPlan(dealerSeat: number): DealStep[] {
   for (let round = 0; round < 3; round += 1) {
     for (const seat of order) steps.push({ seat, count: 4 })
   }
-  for (const seat of order) steps.push({ seat, count: 1 })
   steps.push({ seat: dealerSeat, count: 1 })
+  // 跳牌：跳过这一墩的下层，直接拿下一墩的上层
+  steps.push({ seat: dealerSeat, count: 1, skip: 1 })
+  for (const seat of order.slice(1)) steps.push({ seat, count: 1 })
   return steps
+}
+
+/** 发牌动画的一帧：这张牌给谁、从哪面墙的第几墩第几层抓、这一手是「4 张一把」还是「单张」 */
+export interface DealTraceItem {
+  /** 这张牌进谁的手 */
+  seat: number
+  /** 这张牌原本在哪面墙上（牌墙是一条连续的牌，抓的人和墙不是一家） */
+  from: number
+  col: number
+  layer: number
+  bulk: boolean
+}
+
+/**
+ * 把发牌计划摊成逐张的抓牌顺序，同时算出每张牌来自哪面墙的第几墩哪一层。
+ *
+ * 牌墙是**一条连续的牌**：从开牌墙那段（`wallSeat`）的墙头抓起，抓完接着
+ * 下一段，顺时针绕一圈（自己 → 左手边 → 对面 → 右手边）。
+ * 每段墙都是**从右往左**抓，所以第 g 张落在该段的第 `16 - floor(g / 2)` 墩、
+ * 第 `g % 2` 层。开牌墙最右的 `breakStacks` 摞是留墩，挪到这段末尾最后才抓。
+ * 庄家跳牌跳过的那张留在墙头，因此不会出现在 trace 里（后面摸牌才会摸到）。
+ */
+export function dealTrace(dealerSeat: number, wallSeat = 0, breakStacks = 0): DealTraceItem[] {
+  // 整圈牌按抓牌顺序排好：开牌墙 → 左手边 → 对面 → 右手边（顺时针）
+  const slots: Array<Omit<DealTraceItem, 'seat' | 'bulk'>> = []
+  for (let side = 0; side < SEAT_COUNT; side += 1) {
+    const from = (wallSeat - side + SEAT_COUNT) % SEAT_COUNT
+    for (let index = 0; index < TILES_PER_SIDE; index += 1) {
+      slots.push({ from, col: STACKS_PER_SIDE - 1 - Math.floor(index / 2), layer: index % 2 })
+    }
+  }
+  // 留墩：开牌墙最右的几摞留在原地不动，抓牌从再往左一摞开始；
+  // 它们要等整圈都抓完才轮到，所以排在**整条牌墙**的末尾（不是这一段的末尾）
+  const kept = Math.min(breakStacks * 2, TILES_PER_SIDE - 2)
+  if (kept > 0) {
+    const opening = slots.slice(0, TILES_PER_SIDE)
+    const rest = slots.slice(TILES_PER_SIDE)
+    slots.length = 0
+    slots.push(...opening.slice(kept), ...rest, ...opening.slice(0, kept))
+  }
+  const trace: DealTraceItem[] = []
+  for (const step of dealPlan(dealerSeat)) {
+    for (let index = 0; index < step.count; index += 1) {
+      const skip = index === 0 ? (step.skip ?? 0) : 0
+      const [item] = slots.splice(skip, 1)
+      if (item) trace.push({ ...item, seat: step.seat, bulk: step.count === 4 })
+    }
+  }
+  return trace
 }
 
 /** 本局该座位的手牌张数 */

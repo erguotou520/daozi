@@ -21,6 +21,7 @@ import {
 import {
   createMatch,
   dealPlan,
+  dealTrace,
   rollOpening,
   rollRound,
   rotateSeatsAfterRound,
@@ -283,6 +284,76 @@ console.log('='.repeat(72))
   check('外面 2 张 + 自己 1 张 → 仍禁打', isAbsolutelySafe(2, 1), false)
 }
 
+// 双连号（逢2加1，用户确认口径）
+// 典型双连号：两门小连号 = 2×5 + 逢2加1 再加一门 5 = 15 点
+// → 底4 + 不动手5 + 15 = 24；有压当或 8 只再 +1 = 25；成牌张是字牌（无压当）停在 24
+{
+  console.log('\n[双连号]')
+  // 边张成牌（成牌张不产生压当/单吊），两门小连号 + 不动手
+  const edgeWin = {
+    concealed: ['1万', '2万', '3万', '4万', '5万', '6万', '1筒', '2筒', '3筒', '4筒', '5筒', '6筒', '5条', '5条'],
+    winTile: '1万'
+  }
+  const base = scoreHand(edgeWin)
+  console.log(`  ${base.details.join(' | ')}`)
+  check('两门小连号 → 双连号命中', base.patterns['双连号'], true)
+  check('双连号 = 逢2加1 再加一门（+5）', base.points.items.find(i => i.name === '双连号')?.points ?? 0, 5)
+  check('底4 + 不动手5 + 小连号10 + 双连号5 = 24 点', base.points.total, 24)
+
+  // 8 只（同一门 8 张 → 只子 +1）→ 25
+  const eightTiles = scoreHand({
+    concealed: ['1万', '2万', '3万', '4万', '5万', '5万', '5万', '6万', '1筒', '2筒', '3筒', '4筒', '5筒', '6筒'],
+    winTile: '1万'
+  })
+  console.log(`  [8只] ${eightTiles.details.join(' | ')}`)
+  check('万 8 张 → 只子 +1，共 25 点', eightTiles.points.total, 25)
+
+  // 压当（亚当）→ 25
+  const yaDang = scoreHand({
+    concealed: ['1万', '2万', '3万', '4万', '5万', '6万', '1筒', '2筒', '3筒', '4筒', '5筒', '6筒', '5条', '5条'],
+    winTile: '2万'
+  })
+  console.log(`  [压当] ${yaDang.details.join(' | ')}`)
+  check('成牌张补中张 → 压当 +1，共 25 点', yaDang.points.total, 25)
+  check('压当成牌 → 1 个大摸子', yaDang.mozi.units, 1)
+
+  // 字牌将、边张成牌（没有压当）→ 仍是 24
+  const honorPair = scoreHand({
+    concealed: ['1万', '2万', '3万', '4万', '5万', '6万', '1筒', '2筒', '3筒', '4筒', '5筒', '6筒', '中', '中'],
+    winTile: '1万'
+  })
+  console.log(`  [字牌将] ${honorPair.details.join(' | ')}`)
+  check('字牌将 + 无压当 → 24 点', honorPair.points.total, 24)
+
+  // 成牌张单吊字牌将 → 单吊 +1 → 25（单吊规则照常生效）
+  const honorDanDiao = scoreHand({
+    concealed: ['1万', '2万', '3万', '4万', '5万', '6万', '1筒', '2筒', '3筒', '4筒', '5筒', '6筒', '中', '中'],
+    winTile: '中'
+  })
+  console.log(`  [单吊字牌将] ${honorDanDiao.details.join(' | ')}`)
+  check('单吊字牌将 → 单吊 +1，共 25 点', honorDanDiao.points.total, 25)
+}
+
+// 连号只看手上的牌：副露不参与「连续六张」
+{
+  console.log('\n[连号只数手牌]')
+  // 234456 万（手上）+ 碰 7 万：整手看有 2–7，但手上根本没有六连
+  const withPung = scoreHand({
+    concealed: ['2万', '3万', '4万', '4万', '5万', '6万', '7筒', '8筒', '9筒', '5条', '5条'],
+    melds: [{ kind: '碰', tile: '7万' }]
+  })
+  console.log(`  [碰7万 + 234456万] ${withPung.details.join(' | ')}`)
+  check('234456 万 + 碰 7 万 不算小连号', withPung.points.items.some(i => i.name === '小连号'), false)
+  check('大连号同样不认副露', withPung.points.items.some(i => i.name === '大连号'), false)
+
+  // 手上真有 234567 才算
+  const realRun = scoreHand({
+    concealed: ['2万', '3万', '4万', '5万', '6万', '7万', '7筒', '8筒', '9筒', '5条', '5条']
+  })
+  console.log(`  [234567万] ${realRun.details.join(' | ')}`)
+  check('手上 234567 万 → 小连号', realRun.points.items.some(i => i.name === '小连号'), true)
+}
+
 /* ---------------------------------------------------------------- */
 console.log('\n' + '='.repeat(72))
 console.log('大吊车与桌位流程')
@@ -327,6 +398,43 @@ console.log('='.repeat(72))
   check('发牌总数 53 张', plan.reduce((n, step) => n + step.count, 0), 53)
   check('东家 14 张', countOf(0), 14)
   check('其余各家 13 张', [1, 2, 3].map(countOf).join(','), '13,13,13')
+
+  // 前 12 手都是 4 张一把，顺序是东家起顺时针
+  check('前 4 手顺时针 4 张一把', plan.slice(0, 4).map(step => `${step.seat}:${step.count}`).join(','), '0:4,1:4,2:4,3:4')
+  check('第 1 手不带跳格', plan[0].skip ?? 0, 0)
+  // 东家跳牌：抓 1 张 → 跳过下面那张 → 拿下一墩的上层
+  const jumpIndex = plan.findIndex(step => (step.skip ?? 0) > 0)
+  check('跳牌前已经发了 49 张', plan.slice(0, jumpIndex).reduce((n, step) => n + step.count, 0), 49)
+  check('跳牌那一手是东家', plan[jumpIndex].seat, 0)
+  check('跳牌只跳过 1 张', plan[jumpIndex].skip, 1)
+
+  // 牌墙是一条连续的牌：从开牌墙那段抓起，抓完接着下一段
+  const trace = dealTrace(0, 0, 0)
+  check('逐张抓牌共 53 张', trace.length, 53)
+  check('每张牌都记了出自哪面墙的第几墩第几层', trace.every(item => item.col >= 0 && item.col < 17 && (item.layer === 0 || item.layer === 1)), true)
+  check('东家前 4 张：16 墩上、16 墩下、15 墩上、15 墩下（从右往左）',
+    trace.slice(0, 4).map(item => `${item.col}${item.layer}`).join(','), '160,161,150,151')
+  check('前 34 张全出在开牌墙（座位 0）', trace.slice(0, 34).every(item => item.from === 0), true)
+  check('第 35 张开始接到左手边那面墙（座位 3，顺时针）', trace[34].from, 3)
+  check('东家第 13 张落在 9 墩上', `${trace[48].col}${trace[48].layer}`, '90')
+  check('东家第 14 张跳过 1 张（落在 8 墩上）', `${trace[49].col}${trace[49].layer}`, '80')
+  check('其余三家各 13 张', [1, 2, 3].map(seat => trace.filter(item => item.seat === seat).length).join(','), '13,13,13')
+
+  // 换东家：张数、顺序都要跟着转
+  for (const seat of [1, 2, 3]) {
+    const items = dealTrace(seat, seat, 0)
+    const counts = [0, 0, 0, 0]
+    for (const item of items) counts[item.seat] += 1
+    check(`东家 ${seat}：四家张数`, counts.join(','), [0, 1, 2, 3].map(s => (s === seat ? 14 : 13)).join(','))
+    check(`东家 ${seat}：第一手给他自己`, items[0].seat, seat)
+    check(`东家 ${seat}：从自己牌面右边（16 墩）抓起`, `${items[0].col}${items[0].layer}`, '160')
+  }
+
+  // 留墩：最右边几摞不动，发牌从再往左一摞开始，那几摞排到牌尾最后才抓
+  const kept = dealTrace(0, 0, 3)
+  check('留 3 墩：东家第一张从 13 墩上层开始', `${kept[0].col}${kept[0].layer}`, '130')
+  check('留 3 墩：最右的 16、15、14 墩都不在前 28 张里', kept.slice(0, 28).every(item => item.col <= 13), true)
+  check('留 3 墩：第 29 张才接到左手边那面墙', kept[28].from, 3)
 }
 
 // 四把调圈

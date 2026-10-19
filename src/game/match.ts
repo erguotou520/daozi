@@ -96,11 +96,14 @@ export function startHand(
  * 结算本把并推进。
  * - 有人成牌：点数按结算结果转移；赢家获得下一把掷骰子权；有人点数被付完则本局结束。
  * - 流局：本把无事发生，头家不变。
+ *
+ * @param options.circleDiceSum 打满一圈要调圈时的骰子点数和
+ * @param options.rotate 是否调圈，默认 true；单人演示里座位固定，传 false
  */
-export function endHand(match: MatchState, circleDiceSum?: number): MatchState {
+export function endHand(match: MatchState, options: EndHandOptions = {}): MatchState {
   if (!match.current) throw new Error('当前没有进行中的牌局')
   const settlement = settleHand(match.current)
-  if (settlement) return applyHandSettlement(match, settlement, circleDiceSum)
+  if (settlement) return applyHandSettlement(match, settlement, options)
   return {
     ...match,
     hands: match.hands + 1,
@@ -109,11 +112,18 @@ export function endHand(match: MatchState, circleDiceSum?: number): MatchState {
   }
 }
 
+export interface EndHandOptions {
+  /** 打满一圈要调圈时的骰子点数和；不调圈则不需要 */
+  circleDiceSum?: number
+  /** 是否调圈（换座位），默认 true */
+  rotate?: boolean
+}
+
 /** 把一把的结算结果落到局上；单测可以直接喂一个构造好的结算 */
 export function applyHandSettlement(
   match: MatchState,
   settlement: HandSettlement,
-  circleDiceSum?: number
+  options: EndHandOptions = {}
 ): MatchState {
   const points = match.points.map((value, seat) => value + settlement.pointDelta[seat])
   const money = match.money.map((value, seat) => value + settlement.moneyDelta[seat])
@@ -137,21 +147,19 @@ export function applyHandSettlement(
   }
 
   const finishedRound = match.roundIndex
-  const nextRoundIndex = finishedRound >= ROUNDS_PER_CIRCLE ? 1 : finishedRound + 1
-  const rotated =
-    finishedRound >= ROUNDS_PER_CIRCLE
-      ? (() => {
-          if (circleDiceSum === undefined) {
-            throw new Error(`打满 ${ROUNDS_PER_CIRCLE} 局需要传 circleDiceSum 才能调圈`)
-          }
-          return rotateSeatsAfterRound(match.seats, rollerSeat, circleDiceSum)
-        })()
-      : settled.seats
+  const rotate = options.rotate !== false && finishedRound % ROUNDS_PER_CIRCLE === 0
+  if (rotate && options.circleDiceSum === undefined) {
+    throw new Error(`打满 ${ROUNDS_PER_CIRCLE} 局需要传 circleDiceSum 才能调圈`)
+  }
+  const seats = rotate
+    ? rotateSeatsAfterRound(match.seats, rollerSeat, options.circleDiceSum as number)
+    : settled.seats
 
   return {
     ...settled,
-    seats: rotated,
-    roundIndex: nextRoundIndex,
+    seats,
+    // 局数一直往上加：调圈按「每 4 局一圈」判断，不再把局数折回 1
+    roundIndex: finishedRound + 1,
     points: Array.from({ length: SEAT_COUNT }, () => STARTING_POINTS),
     money: Array.from({ length: SEAT_COUNT }, () => 0),
     hands: 0,
