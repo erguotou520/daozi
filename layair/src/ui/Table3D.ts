@@ -29,7 +29,17 @@ const FLAT_W = 38
 const FLAT_D = 50
 const TABLE_W = 1280
 const TABLE_D = 900
-const SELF_HAND_Z = TABLE_D / 2 - 120
+/**
+ * 手牌离桌沿的留白：四家统一一张牌厚（TILE_T）。
+ * 牌是立着的，沿「朝向桌心」那个轴的厚度就是 TILE_T，
+ * 所以牌体中心 = 桌沿 - 留白 - TILE_T / 2。
+ * （早先自家留 120、其它三家只留 4~22：近处的自己离桌边特别远，
+ * 另外三家却卡在桌沿上，四家看着完全不齐。）
+ */
+const HAND_EDGE_GAP = TILE_T
+const HAND_Z_SELF = TABLE_D / 2 - HAND_EDGE_GAP - TILE_T / 2
+const HAND_Z_OPP = -HAND_Z_SELF
+const HAND_X_SIDE = TABLE_W / 2 - HAND_EDGE_GAP - TILE_T / 2
 const WALL_SIDE = 600
 const STACKS = 17
 const WALL_STEP = WALL_SIDE / STACKS
@@ -335,11 +345,14 @@ export class Table3D {
     drawn = false
   ) {
     const group = new Laya.Sprite3D()
-    group.transform.position = new Laya.Vector3(x, y + (drawn ? 8 : 0), z)
+    group.transform.position = new Laya.Vector3(x, y, z)
     group.transform.rotationEuler = new Laya.Vector3(0, rotationY, 0)
     parent.addChild(group)
 
-    const bodyColor = faceUp ? '#2F7A5E' : '#2F7A5E'
+    // 牌背（对家/左右家）直接用亮一档的绿牌体，不再贴任何面板：
+    // 薄面板一旦套 BlinnPhong 材质，法线在 1.7 的厚度上退化，整组手牌会一起不渲染
+    //（牌背一直"消失"就是这个），想加牌背贴图只能等换 Unlit 贴图管线再试。
+    const bodyColor = faceUp ? '#2F7A5E' : '#3C9374'
     this.addRounded(TILE_W, TILE_H, TILE_T, 4.5, this.bodyMaterial(bodyColor), 0, 0, 0, group)
 
     if (faceUp) {
@@ -352,20 +365,6 @@ export class Table3D {
         0,
         0,
         TILE_T / 2 + 0.9,
-        group
-      )
-    } else {
-      // 牌背：白顶 + 绿色牌背，牌背朝相机
-      this.addRounded(TILE_W, 3, TILE_T, 1.2, this.bodyMaterial(COLORS.ivory), 0, TILE_H / 2 - 1.5, 0, group)
-      this.addRounded(
-        TILE_W - 1.5,
-        TILE_H - 5,
-        1.7,
-        0.85,
-        this.bodyMaterial('#3C9374'),
-        0,
-        -2,
-        TILE_T / 2 + 0.8,
         group
       )
     }
@@ -430,15 +429,16 @@ export class Table3D {
     for (let i = 0; i < tiles.length; i += 1) {
       const tile = tiles[i]
       if (seat === 0) {
-        const x = startX + i * step
-        this.addStandingTile(tile, x, TILE_H / 2 + 2, SELF_HAND_Z, faceUp, this.dynamicRoot, 0, i === drawnIndex)
-        this.recordSelfHit(tile, i, x, TILE_H / 2 + (i === drawnIndex ? 10 : 2), SELF_HAND_Z, i === drawnIndex)
+        // 刚摸到的牌只往右让一点，底部仍和手牌齐平（原先整只抬高 8，看着像往后缩）
+        const x = startX + i * step + (i === drawnIndex ? 7 : 0)
+        this.addStandingTile(tile, x, TILE_H / 2 + 2, HAND_Z_SELF, faceUp, this.dynamicRoot, 0, i === drawnIndex)
+        this.recordSelfHit(tile, i, x, TILE_H / 2 + 2, HAND_Z_SELF, i === drawnIndex)
       } else if (seat === 2) {
         const x = startX + i * step
-        this.addStandingTile(tile, x, TILE_H / 2 + 2, -TABLE_D / 2 + 22, faceUp, this.dynamicRoot, faceUp ? 0 : 180)
+        this.addStandingTile(tile, x, TILE_H / 2 + 2, HAND_Z_OPP, faceUp, this.dynamicRoot, faceUp ? 0 : 180)
       } else {
         const z = startX + i * step
-        const x = seat === 3 ? -TABLE_W / 2 + 18 : TABLE_W / 2 - 18
+        const x = seat === 3 ? -HAND_X_SIDE : HAND_X_SIDE
         this.addStandingTile(tile, x, TILE_H / 2 + 2, z, faceUp, this.dynamicRoot, faceUp ? 0 : seat === 3 ? 90 : -90)
       }
     }
