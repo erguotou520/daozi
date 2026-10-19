@@ -194,7 +194,7 @@ export class Table3D {
             dy /= len
             dz /= len
           }
-          verts.push(cx + dx * r, cy + dy * r, cz + dz * r, dx, dy, dz, i / seg, 1 - j / seg)
+          verts.push(cx + dx * r, cy + dy * r, cz + dz * r, dx, dy, dz, 1 - i / seg, 1 - j / seg)
         }
       }
       for (let j = 0; j < seg; j += 1) {
