@@ -163,7 +163,7 @@ export const OpponentSeat = defineComponent({
       const meldFirst = props.side === 'top' || props.side === 'right'
 
       const hand = (
-        <div class={['flex gap-[2px]', vertical ? 'flex-col' : 'flex-row']}>
+        <div class={['flex', vertical ? 'flex-col' : 'flex-row']}>
           {props.tiles.map((tile, index) =>
             props.reveal ? (
               <TileView key={index} tile={tile} size="seat" rotate={rotate} />

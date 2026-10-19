@@ -1,0 +1,13 @@
+{
+  "projectname": "daozi",
+  "compileType": "game",
+  "libVersion": "latest",
+  "setting": {
+    "urlCheck": false,
+    "es6": false,
+    "postcss": true,
+    "minified": false,
+    "newFeature": true
+  },
+  "appid": "wx35973ee7b1494ae8"
+}

@@ -1,0 +1,118 @@
+# 倒子麻将 · LayaAir 版
+
+把 web 端（`src/`）的牌桌玩法完整迁移到 LayaAir 3.4，一套代码同时跑浏览器和微信小游戏。
+
+| 横屏 · 牌桌（手机默认） | 横屏 · 结算 |
+| --- | --- |
+| ![横屏牌桌](docs/screenshots/landscape.png) | ![横屏结算](docs/screenshots/landscape-settlement.png) |
+
+| 累计战绩 / 本地存档 | 退出确认 |
+| --- | --- |
+| ![累计战绩](docs/screenshots/stats.png) | ![退出确认](docs/screenshots/exit.png) |
+
+| 手机竖着打开（固定横屏布局，侧放） | 手机逆时针转 90° 后 |
+| --- | --- |
+| ![手机竖屏](docs/screenshots/mobile-portrait.png) | ![手机横屏](docs/screenshots/mobile-portrait-upright.png) |
+
+| 竖屏 · 桌面窗口 | 自摸成牌：成 / 打 |
+| --- | --- |
+| ![竖屏桌面](docs/screenshots/portrait-shortage.png) | ![成打选择](docs/screenshots/win-choice.png) |
+
+## 已实现
+
+- **横屏全屏**：手机 / 微信小游戏始终按横屏布局，以 750 设计高铺满屏幕；本家和对家手牌放大，上家/下家手牌缩小，横屏也排得下。手机竖着拿时整个牌桌根节点旋转 90°（不依赖 `screenMode` 和系统自动旋转），打开就是横屏牌桌，不会被压成竖条，也不弹「请横屏」；画面侧放，逆时针转手机即可。微信由 `game.json` 锁定横屏。桌面竖屏窗口保留竖屏布局。
+- **掷骰开局**：两颗骰子滚动动画，按点数和定东家、开牌墙、留墩。
+- **发牌动画**：53 张逐张发到四家，牌墙按实际抓走的位置实时变短，庄家跳牌留缺口。
+- **定缺**：三家 AI 自动定缺，玩家点「缺万 / 缺筒 / 缺条」。
+- **摸打**：摸牌、手牌排序、刚摸到的牌单独抬到最右；有缺门牌时只能打缺门牌并高亮。
+- **自摸成牌**：摸到成牌张后不自动成牌，中央出现「成 / 打」；选成结束本把，选打再点一张手牌继续。
+- **杠**：手里四张可暗杠，碰过的牌摸到第四张可加杠；杠后从牌尾补一张，补牌成牌可杠开。按钮会显示「杠2万」。
+- **碰 / 杠 / 成 / 过**：接牌优先级、杠后补牌、碰完立即出牌，全部沿用 web 引擎。
+- **大吊车禁打**：禁打牌用红框标出，打出禁牌会记录并在成牌时算点炮。
+- **结算**：成牌底点、对子、只子、通、连号、棒棒、四活、不动手、草一色、对对胡、七对、大吊车、老小对、三打一、杠开、枯只压、清水、大拿、摸子，全部由 `src/game/score.ts` 原样计算。
+  - 一局还没结束时，结算只显示点数与点数明细，不显示金额；只有本局结束（有人点数被付完）时才显示每家金额，随后进入总账。
+  - 横屏结算按内容收窄、压矮，只显示成牌家、点数、四家点数增减、最多 4 条关键牌型；四家的亮牌都露在面板外。
+  - 接牌成刻：对倒听牌时别人打出其中一张凑成刻子，这一组按碰 1 点算（借牌），其余暗刻仍 2 点；自摸仍是 2 点。
+- **局流程**：一局 50 点，点数被付完本局结束，弹总账（本局 / 累计），可开下一局；四把调圈逻辑保留在 `table.ts`。
+- **梯形牌桌**：横屏桌面收成居中的梯形，对家一面约 80% 宽；上下墙、左右墙每墩用同一底尺寸，只按透视做 80% 横向和纵深形变，不再把本家这面墙拉成长条。
+- **牌面朝向**：从本家视角，牌顶先青绿、再白色侧厚、最后牌面；对家先白色+青绿顶、再牌背；左右两家随牌旋转，能看到顶/背/侧面。每张牌有顶面、正面、右侧厚度和落影，三个面之间都压黑线。
+- **累计战绩 / 存档**：左上角图表图标打开累计战绩（每家成牌次数、成牌点数、大/小摸子、输赢金额）。右上角退出会询问「保留并退出 / 清空并退出」；保留会把当前牌局和战绩写入 LayaAir / 微信本地存储，下次进入从当前继续；清空等于重置。
+- **牌墙**：摸走哪一层就空哪一层；两层牌之间、相邻墩之间都留黑缝；只剩上层/只剩下层时只占半格高度，墙上会留下真实的缺口。
+- **手牌**：四家手牌之间留黑缝，既有分隔又不会散开。
+- **固定相机 2.5D**：每张牌用顶面 / 正面 / 右侧厚度 / 落影画出体积；牌与牌、墙墩与墙墩之间都有黑线，绿色顶面不会连成一片。牌墙和桌面视角统一，桌沿改成有厚度的实木条。全部用矢量绘制，不依赖图片资源。
+- **界面**：深毡绿牌桌、象牙牌面、黄铜描边、朱红骰点；按钮保留牌面/描边两种质感。
+
+## 目录
+
+```
+layair/
+  assets/Scene.ls          启动场景（根节点挂 Main 脚本）
+  src/Main.ts              入口脚本：横屏/竖屏适配 + 创建牌桌
+  scripts/fix-wxgame.mjs   wxgame 构建后收尾（横屏 + appid）
+  src/game/                从 web 端原样复制的纯逻辑
+    score.ts               结算引擎
+    table.ts               掷骰 / 发牌 / 调圈
+    game.ts                单把状态机
+    match.ts               一局（多把）流程
+    manual.ts              手动算分模型（暂未做 UI）
+  src/ui/theme.ts          配色、字体、牌面比例
+  src/ui/widgets.ts        牌、骰子、牌墙墩、按钮、文本
+  src/ui/TableView.ts      牌桌视图与交互
+  src/ui/storage.ts        本地战绩 / 当前牌局存档
+  build-templates/wxgame/  LayaAir 每次构建都会覆盖到 release/wxgame（固定 AppID / game.json）
+```
+
+## 运行（IDE）
+
+1. 用 LayaAirIDE 3.4 打开 `layair/倒子.laya`。
+2. 打开启动场景 `assets/Scene.ls`。
+3. 点运行。编辑器里是横屏预览；手机 / 微信也是横屏舞台（手机竖着拿时画布内部旋转 90°）。
+
+## 微信小游戏
+
+1. 在 LayaAirIDE 中构建发布，平台选 **微信小游戏（wxgame）**，输出目录为 `release/wxgame`。
+2. 用微信开发者工具「导入项目」选择 `release/wxgame`。
+3. **AppID 已经固定为 `wx35973ee7b1494ae8`**，不需要每次编译后手填。
+   - 配置放在 `build-templates/wxgame/project.private.config.json`；LayaAir 构建 wxgame 时会把 `build-templates/wxgame/*` 复制到 `release/wxgame`。
+   - 微信开发者工具中 `project.private.config.json` 的 `appid` 优先级高于 `project.config.json`；即使 LayaAir 生成的 `project.config.json` 里没有 appid，也会读这个固定值。
+   - 要换 AppID：改这个文件里的 `appid`（或执行 `WX_APPID=wx... node scripts/fix-wxgame.mjs`），下次构建仍然生效。
+   - 如果开发者工具第一次导入仍显示游客 appid，在「详情 → 基本信息」里填一次 `wx35973ee7b1494ae8`；它会写回 `project.private.config.json`，而 LayaAir 构建不会删这个文件。
+4. `game.json` 需要横屏（`deviceOrientation: landscape`）。LayaAir 的 wxgame 插件会在构建末尾重新生成 `game.json`，所以仍需构建后执行一次：
+
+   ```bash
+   node scripts/fix-wxgame.mjs
+   ```
+
+   脚本会把 `game.json` 改成横屏，并把 AppID 兜底写进 `project.config.json` / `project.private.config.json`（默认 `wx35973ee7b1494ae8`，可用 `WX_APPID` 覆盖）。
+
+> 微信开发者工具需要先用自己的微信登录。构建产物已经验证过结构、2.7MB 主包大小和横屏配置；真机预览 / 上传要在登录后的开发者工具里完成。
+
+命令行构建（已可用）：
+
+```bash
+# 通过 LayaAir IDE 的 MCP 或 IDE 构建面板
+# 平台参数：wxgame / web
+```
+
+产物只依赖 `laya.core.js`、`laya.webgl_2D.js`、`laya.ui2.js` 等引擎文件和 `js/bundle.js`，没有额外图片 / 图集需要加载。
+
+## 调试
+
+- `F`：切换快速模式（AI 思考时间压到 12%）。
+- `A`：切换自动打（自己这一家也交给 AI），用来快速跑完一把 / 一局验收结算。
+- 浏览器地址加 `?fast=1`：启动即进入快速模式。
+- 这三个开关只影响节奏，微信小游戏没有键盘，不会触发。
+
+## 与 web 端的对应
+
+| web | LayaAir |
+| --- | --- |
+| `src/game/*.ts` | `layair/src/game/*.ts`（原样复制，只改 import 路径） |
+| `src/pages/index/index.tsx` 牌桌 | `layair/src/ui/TableView.ts` |
+| `TileView.tsx` / `TableParts.tsx` | `widgets.ts` 里的 `TileView` / `makeWallStack` / `DiceView` |
+| `styles/theme.css` | `theme.ts` + `TableView.drawChrome()` |
+| AI 定时器 | `Laya.timer` + `setInterval`（骰子滚动） |
+
+## 还没迁移
+
+- `/helper` 下的「算分」「记分」两个工具页。它们不是牌桌玩法；`game/manual.ts` 已经带过来了，需要时可以再补两个界面。

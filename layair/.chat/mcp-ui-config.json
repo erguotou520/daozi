@@ -1,0 +1,66 @@
+{
+  "isFirstRun": false,
+  "currentTab": "dashboard",
+  "wizard": {
+    "active": false,
+    "currentStep": 2,
+    "config": {
+      "serverPort": 18188,
+      "autoStart": true,
+      "selectedIdes": []
+    }
+  },
+  "server": {
+    "port": 18188,
+    "autoStart": true
+  },
+  "setup": {
+    "selectedIdeForPreview": "cursor"
+  },
+  "ides": [
+    {
+      "id": "cursor",
+      "name": "Cursor",
+      "isInstalled": false,
+      "isConfigured": false,
+      "isRuleSaved": false,
+      "selected": false
+    },
+    {
+      "id": "claude-desktop",
+      "name": "Claude Desktop",
+      "isInstalled": false,
+      "isConfigured": false,
+      "isRuleSaved": false,
+      "selected": false
+    },
+    {
+      "id": "claude-cli",
+      "name": "Claude Code",
+      "isInstalled": true,
+      "isConfigured": true,
+      "isRuleSaved": true,
+      "selected": true
+    },
+    {
+      "id": "codex-cli",
+      "name": "Codex",
+      "isInstalled": true,
+      "isConfigured": true,
+      "isRuleSaved": true,
+      "selected": true
+    },
+    {
+      "id": "trae",
+      "name": "Trae",
+      "isInstalled": false,
+      "isConfigured": false,
+      "isRuleSaved": false,
+      "selected": false
+    }
+  ],
+  "ui": {
+    "consoleExpanded": true,
+    "helpModalOpen": false
+  }
+}

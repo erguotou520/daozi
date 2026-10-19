@@ -52,6 +52,8 @@ const TablePage = defineComponent({
     const board = ref<MatchState | null>(null)
     /** 当前这把 */
     const state = ref<HandState | null>(null)
+    /** 自摸成牌后玩家选择「打」，先收起成牌提示 */
+    const declinedWin = ref(false)
     const phase = ref<TablePhase>('idle')
     const dice = ref<{ a: number; b: number } | null>(null)
     const shownDice = ref<{ a: number; b: number }>({ a: 1, b: 1 })
@@ -121,6 +123,7 @@ const TablePage = defineComponent({
     const act = (action: RoundAction, delay = 420 * PACE) => {
       const hand = state.value
       if (!hand) return
+      if (action.type !== 'discard') declinedWin.value = false
       try {
         state.value = applyAction(hand, action)
       } catch {
@@ -194,6 +197,7 @@ const TablePage = defineComponent({
     }
 
     const start = () => {
+      declinedWin.value = false
       roundSummary.value = null
       rollAndDeal()
     }
@@ -231,6 +235,7 @@ const TablePage = defineComponent({
     }
 
     const quit = () => {
+      declinedWin.value = false
       clearTimer()
       clearDeal()
       state.value = null
@@ -338,6 +343,12 @@ const TablePage = defineComponent({
 
     const myActions = computed(() => (state.value && isMyTurn.value ? legalActions(state.value, 0) : []))
     const myClaims = computed(() => myActions.value.filter(action => action.type === 'claim' || action.type === 'pass'))
+    const myWin = computed(() =>
+      myActions.value.find((action): action is Extract<RoundAction, { type: 'win' }> => action.type === 'win')
+    )
+    const myKongs = computed(() =>
+      myActions.value.filter((action): action is Extract<RoundAction, { type: 'kong' }> => action.type === 'kong')
+    )
 
     const playable = computed(() => {
       const hand = state.value
@@ -617,6 +628,43 @@ const TablePage = defineComponent({
                     </div>
                   )}
 
+                  {/* 自摸成牌 / 自家杠 */}
+                  {playing && hand?.phase === 'discard' && isMyTurn.value && (myWin.value || myKongs.value.length > 0) && (
+                    <div class="mt-0.5 flex flex-wrap justify-center gap-1">
+                      {myWin.value && !declinedWin.value ? (
+                        <>
+                          <button
+                            type="button"
+                            class="tile-face-sm tile-press claim-in rounded-lg px-3 py-1 font-serif text-[13px] text-ink"
+                            onClick={() => act(myWin.value!)}
+                          >
+                            成
+                          </button>
+                          <button
+                            type="button"
+                            class="chip tile-press claim-in rounded-lg px-3 py-1 font-serif text-[12px]"
+                            onClick={() => {
+                              declinedWin.value = true
+                            }}
+                          >
+                            打
+                          </button>
+                        </>
+                      ) : (
+                        myKongs.value.map(action => (
+                          <button
+                            key={`${action.kind}-${action.tile}`}
+                            type="button"
+                            class="chip tile-press claim-in rounded-lg px-2.5 py-1 font-serif text-[12px]"
+                            onClick={() => act(action)}
+                          >
+                            杠{action.tile}
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  )}
+
                 </div>
 
                 {/* 本把结算：单独一张牌摊在桌心，字够大，也不跟牌河挤在一起 */}
@@ -625,13 +673,13 @@ const TablePage = defineComponent({
                     class="absolute left-1/2 top-1/2 z-20"
                     style={{
                       transform: 'translate(-50%, -50%)',
-                      width: 'max(16rem, calc(var(--ring-h) * 0.86))'
+                      width: 'max(14rem, calc(var(--ring-h) * 0.62))'
                     }}
                   >
                     <div
                       class="settle-in"
                       style={{
-                        maxHeight: 'calc(var(--ring-h) * 0.96)',
+                        maxHeight: 'calc(var(--ring-h) * 0.78)',
                         overflowY: 'auto',
                         borderRadius: '0.9rem',
                         background: 'linear-gradient(180deg, rgba(16, 58, 46, 0.96) 0%, rgba(7, 28, 23, 0.97) 100%)',
@@ -665,9 +713,11 @@ const TablePage = defineComponent({
                           {hand!.isFirstHand && win.score.bigWin.isBigWin && (
                             <span class="rounded-[3px] bg-brass px-1.5 text-[11px] leading-5 text-ink">清水</span>
                           )}
-                          <span class="ml-auto text-[12px] text-brass">
-                            {win.score.money.perOpponentTotal} 元/家 · 合计 {win.score.money.total} 元
-                          </span>
+                          {result?.gameOver && (
+                            <span class="ml-auto text-[12px] text-brass">
+                              {win.score.money.perOpponentTotal} 元/家 · 合计 {win.score.money.total} 元
+                            </span>
+                          )}
                         </div>
 
                         {/* 四家点数变化 */}
@@ -687,9 +737,11 @@ const TablePage = defineComponent({
                         </div>
 
                         <div class="mt-2 space-y-0.5 px-3 pb-2.5 text-[12px] leading-5 text-mist">
-                          {win.score.details.map((line, index) => (
-                            <div key={index}>{line}</div>
-                          ))}
+                          {win.score.details
+                            .filter(line => result?.gameOver || !/元|应付/.test(line))
+                            .map((line, index) => (
+                              <div key={index}>{line}</div>
+                            ))}
                         </div>
                       </>
                     ) : (
@@ -753,10 +805,14 @@ const TablePage = defineComponent({
                   class="absolute bottom-1 left-1/2 z-20 flex items-end justify-center gap-3"
                   style={{ transform: 'translateX(-50%)' }}
                 >
-                  <div class="flex gap-[3px]">
+                  <div class="flex">
                     {myHand.map((tile, index) => {
                       const isDrawn = !!myDrawn.value && index === myHand.length - 1
-                      const canPlay = hand.phase === 'discard' && isMyTurn.value && playable.value.has(tile)
+                      const canPlay =
+                        hand.phase === 'discard' &&
+                        isMyTurn.value &&
+                        playable.value.has(tile) &&
+                        !(myWin.value && !declinedWin.value)
                       const isForbidden = forbidden.value.has(tile)
                       const mustPlay = canPlay && mustPlayShortage.value
                       return (
@@ -878,9 +934,13 @@ const TablePage = defineComponent({
                   {playing && !isOver && hand!.phase !== 'choose-shortage' && !(hand!.phase === 'draw' && isMyTurn.value) && (
                     <span class="px-3 py-1 text-[11px] text-mist">
                       {isMyTurn.value
-                        ? mustPlayShortage.value
-                          ? '必须打缺门牌'
-                          : '点手牌打出'
+                        ? myWin.value && !declinedWin.value
+                          ? '成牌！选 成 / 打'
+                          : myKongs.value.length
+                            ? '可以杠，或点手牌打出'
+                            : mustPlayShortage.value
+                              ? '必须打缺门牌'
+                              : '点手牌打出'
                         : `${SEAT_NAMES[actor ?? 0]}在出牌…`}
                     </span>
                   )}

@@ -147,14 +147,14 @@ export const WallStack = defineComponent({
   setup(props) {
     return () => {
       const empty = !props.top && !props.bottom
-      // 只剩一只：不再只画那半层（会留半格洞），改成一只牌铺满整墩
-      const solo = props.top !== props.bottom
-      const cls = ['wall-stack', empty ? 'is-none' : solo ? 'is-half' : 'is-full', props.flat ? 'is-flat' : '', props.flip ? 'is-flipped' : '']
+      // 摸走哪一层就少哪一层：只剩上层只画上半格，只剩下层只画下半格，
+      // 整墩不会因为剩一只牌就撑满两格高度（会在墙上留一个真实的缺口）。
+      const cls = ['wall-stack', empty ? 'is-none' : 'is-full', props.flat ? 'is-flat' : '', props.flip ? 'is-flipped' : '']
         .filter(Boolean)
         .join(' ')
       if (empty) return <span class={cls} />
       // 后层先画（被前层压住下半截），前层后画盖在上面
-      const tile = (pos: 'front' | 'back' | 'solo') => (
+      const tile = (pos: 'front' | 'back') => (
         <span class={`wall-tile is-${pos}`}>
           <span class="wall-tile-face" />
           <span class="wall-tile-side" />
@@ -163,7 +163,8 @@ export const WallStack = defineComponent({
       return (
         <span class={cls}>
           <span class="wall-body">
-            {solo ? tile('solo') : [tile('back'), tile('front')]}
+            {props.top && tile('back')}
+            {props.bottom && tile('front')}
           </span>
         </span>
       )
