@@ -27,6 +27,7 @@ import { createMatch, endHand, startHand, STARTING_POINTS, type MatchState } fro
 import { meldTiles, tileOrder, type Meld, type NumberSuit, type Tile } from '../game/score'
 import { COLORS, FONT_SERIF, SEAT_NAMES, TILE_RATIO } from './theme'
 import { DiceView, makeButton, makePanel, makeText, makeWallStack, TileView } from './widgets'
+import { Table3D } from './Table3D'
 import {
   clearAllData,
   createHistory,
@@ -119,6 +120,9 @@ export class TableView {
   private content: Laya.Sprite
   private diceLayer: Laya.Sprite
   private overlay: Laya.Sprite
+  private threeView: Laya.Sprite
+  private three: Table3D | null = null
+  private use3D = true
   private diceViews: DiceView[] = []
 
   private m: Metrics
@@ -151,6 +155,15 @@ export class TableView {
     this.root.size(this.viewW, this.viewH)
     owner.addChild(this.root)
 
+    this.threeView = new Laya.Sprite()
+    this.threeView.name = 'Table3DView'
+    this.threeView.size(this.viewW, this.viewH)
+    this.threeView.mouseEnabled = false
+    this.threeView.mouseThrough = true
+    this.root.addChildAt(this.threeView, 0)
+
+    if (HAS_WINDOW && ((window as any).location?.search ?? '').indexOf('2d=1') >= 0) this.use3D = false
+
     this.bgLayer = new Laya.Sprite()
     this.boardLayer = new Laya.Sprite()
     this.content = new Laya.Sprite()
@@ -171,11 +184,39 @@ export class TableView {
     this.content.pos(this.m.boardX, this.m.boardY)
     this.drawChrome()
     this.render()
+    Laya.timer.once(40, this, this.init3D)
 
     Laya.stage.on(Laya.Event.KEY_DOWN, this, this.onKeyDown)
     this.createDice()
     this.positionDice()
     if (this.phase === 'playing') this.schedule(600, () => this.tick())
+  }
+
+  private init3D() {
+    if (!this.use3D || this.three) return
+    try {
+      this.three = new Table3D(this.viewW, this.viewH)
+      this.threeView.visible = true
+      this.threeView.size(this.viewW, this.viewH)
+      this.bgLayer.visible = false
+      this.boardLayer.visible = false
+      this.diceLayer.visible = false
+      this.render()
+    } catch (err) {
+      Laya.timer.once(120, this, this.init3D)
+    }
+  }
+
+  private sync3D() {
+    if (!this.three) return
+    const dice = this.phase === 'rolling' ? this.shownDice : this.dice ?? this.shownDice
+    this.three.sync(this.hand, this.myHandTiles(), dice, this.phase === 'rolling')
+    this.threeView.graphics.clear()
+    this.threeView.graphics.drawTexture(this.three.texture, 0, 0, this.viewW, this.viewH)
+  }
+
+  private is3D(): boolean {
+    return this.use3D && !!this.three
   }
 
   /** 以 375 牌桌宽/高为基准的缩放 */
@@ -218,11 +259,19 @@ export class TableView {
     this.rotateLandscape = rotate
     this.viewW = width
     this.viewH = height
+    this.three?.dispose()
+    this.three = null
+    this.threeView.graphics.clear()
+    this.threeView.size(width, height)
+    this.threeView.visible = false
+    this.bgLayer.visible = true
+    this.boardLayer.visible = true
     this.applyRootTransform()
     this.m = this.measure()
     this.content.pos(this.m.boardX, this.m.boardY)
     this.drawChrome()
     this.render()
+    if (this.use3D) Laya.timer.once(0, this, this.init3D)
   }
 
   /** 横屏：牌桌铺满整屏，本家/对家手牌大，左右两家手牌小 */
@@ -487,6 +536,12 @@ export class TableView {
   }
 
   private positionDice() {
+    if (this.is3D()) {
+      const dice = this.phase === 'rolling' ? this.shownDice : this.dice ?? this.shownDice
+      this.three?.updateDice(this.phase === 'idle' || (this.hand && this.hand.phase === 'over') ? null : dice, this.phase === 'rolling')
+      this.diceLayer.visible = false
+      return
+    }
     const m = this.m
     const rolling = this.phase === 'rolling'
     const size = Math.round(this.u(rolling ? 58 : 24))
@@ -512,7 +567,9 @@ export class TableView {
 
   private render() {
     this.content.destroyChildren()
+    this.content.graphics.clear()
     this.overlay.destroyChildren()
+    if (this.is3D()) this.sync3D()
 
     if (this.phase === 'idle') {
       this.renderIdle()
@@ -561,6 +618,7 @@ export class TableView {
   }
 
   private renderWalls() {
+    if (this.is3D()) return
     const m = this.m
     const visual = this.wallVisual()
 
@@ -647,6 +705,7 @@ export class TableView {
   }
 
   private renderDiscards() {
+    if (this.is3D()) return
     const hand = this.hand
     if (!hand) return
     for (let seat = 0; seat < 4; seat += 1) {
@@ -737,6 +796,10 @@ export class TableView {
   }
 
   private renderCenter() {
+    if (this.is3D()) {
+      this.renderCenter3D()
+      return
+    }
     const m = this.m
     const hand = this.hand
 
@@ -1114,6 +1177,7 @@ export class TableView {
     let y = this.u(4)
 
     this.seatMeta('对面', dealer, shortage, points, count, x, y, blockW, 'center')
+    if (this.is3D()) return
     y += this.u(18)
 
     const rack = player && player.melds.length ? this.meldRackHorizontal(player.melds, m.meldW) : null
@@ -1168,6 +1232,7 @@ export class TableView {
     const y = m.boardH / 2 - blockH / 2
 
     this.seatMetaVertical(left ? '上家' : '下家', dealer, shortage, points, count, x, y, blockW)
+    if (this.is3D()) return
     let cy = y + infoH
     for (let i = 0; i < tiles.length; i += 1) {
       const tile = reveal
@@ -1260,6 +1325,10 @@ export class TableView {
   }
 
   private renderHand() {
+    if (this.is3D()) {
+      this.renderHand3D()
+      return
+    }
     const hand = this.hand
     if (!hand) return
     const m = this.m
@@ -1326,6 +1395,175 @@ export class TableView {
   /* ------------------------------------------------------------------ *
    * 操作条
    * ------------------------------------------------------------------ */
+
+  /** 3D 模式：中间只留一条很窄的提示，不再用大面板挡牌河 */
+  private renderCenter3D() {
+    const m = this.m
+    const hand = this.hand
+    const cx = m.boardW / 2
+    const cy = m.boardH / 2
+
+    if (this.phase === 'rolling') {
+      this.content.addChild(
+        makeText('掷骰…', {
+          size: this.u(11),
+          color: COLORS.mist,
+          align: 'center',
+          width: this.u(160),
+          height: this.u(20),
+          x: cx - this.u(80),
+          y: cy - this.u(140)
+        })
+      )
+      return
+    }
+    if (!hand || hand.phase === 'over') return
+
+    const match = this.board
+    const actor = this.currentActor(hand)
+    const status = this.phase === 'dealing'
+      ? `发牌 ${this.dealProgress}/53`
+      : hand.phase === 'choose-shortage'
+        ? hand.players[0].shortage ? '等别家定缺' : '选缺门'
+        : this.isMyTurn(hand)
+          ? '轮到你'
+          : actor === null ? '本把结束' : `轮到${SEAT_NAMES[actor]}`
+    const round = match ? `第${match.roundIndex}局·第${match.hands + 1}把` : '本局'
+    const text = `${round}  ·  牌山 ${remainingTiles(hand)}  ·  ${status}`
+    const pillW = Math.round(Math.min(m.boardW * 0.42, this.u(280)))
+    const pillH = this.u(26)
+    const px = Math.round(cx - pillW / 2)
+    const py = Math.round(cy - this.u(118))
+    const pill = makePanel(pillW, pillH, this.u(13), 'rgba(7,28,23,0.52)', 'rgba(217,180,95,0.26)', 1)
+    pill.pos(px, py)
+    this.content.addChild(pill)
+    this.content.addChild(
+      makeText(text, {
+        size: this.u(9),
+        color: COLORS.mist,
+        align: 'center',
+        valign: 'middle',
+        width: pillW,
+        height: pillH,
+        x: px,
+        y: py
+      })
+    )
+    if (hand.isFirstHand) {
+      this.content.addChild(
+        makeText('首牌', {
+          size: this.u(8),
+          color: COLORS.brass,
+          align: 'right',
+          width: pillW - this.u(10),
+          height: this.u(14),
+          x: px,
+          y: py - this.u(14)
+        })
+      )
+    }
+
+    // 只给最后打出的那张牌加黄色描边，不再写“刚打某家”
+    const mark = this.three?.lastMark
+    if (mark && mark.w > 0 && mark.h > 0) {
+      const gx = mark.x - m.boardX
+      const gy = mark.y - m.boardY
+      this.content.graphics.drawRoundRect(
+        Math.round(gx) - this.u(3),
+        Math.round(gy) - this.u(3),
+        Math.round(mark.w) + this.u(6),
+        Math.round(mark.h) + this.u(6),
+        this.u(4), this.u(4), this.u(4), this.u(4),
+        null as any,
+        '#F5C542',
+        Math.max(2, this.u(2))
+      )
+    }
+  }
+
+  /** 3D 手牌只保留投影后的点击层 + 可打/禁打描边 */
+  private renderHand3D() {
+    const hand = this.hand
+    if (!hand || !this.three) return
+    const tiles = this.myHandTiles()
+    if (!tiles.length) return
+    const myTurn = hand.phase === 'discard' && this.currentActor(hand) === 0
+    const playable = new Set(playableDiscards(hand, 0))
+    const forbidden = new Set(forbiddenDiscardsFor(hand, 0))
+    const mustShortage = shortageTiles(hand.players[0]).length > 0
+    const winPending =
+      myTurn && !this.declinedWin && legalActions(hand, 0).some(action => action.type === 'win')
+
+    for (const hit of this.three.selfHits) {
+      if (!hit || hit.w <= 0 || hit.h <= 0) continue
+      const canPlay = myTurn && playable.has(hit.tile) && !winPending
+      const isMustPlay = canPlay && mustShortage
+      const isForbidden = myTurn && forbidden.has(hit.tile)
+      const x = Math.round(hit.x - this.m.boardX)
+      const y = Math.round(hit.y - this.m.boardY)
+      const view = new Laya.Sprite()
+      view.size(Math.max(1, Math.round(hit.w)), Math.max(1, Math.round(hit.h)))
+      view.pos(x, y)
+      if (isMustPlay) {
+        view.graphics.drawRoundRect(0, 0, view.width, view.height, this.u(4), this.u(4), this.u(4), this.u(4), null as any, COLORS.brass, 2)
+      } else if (isForbidden) {
+        view.graphics.drawRoundRect(0, 0, view.width, view.height, this.u(4), this.u(4), this.u(4), this.u(4), null as any, 'rgba(200,69,47,0.9)', 2)
+      }
+      if (canPlay) {
+        view.hitArea = new Laya.Rectangle(0, 0, view.width, view.height)
+        view.mouseEnabled = true
+        view.on(Laya.Event.CLICK, null, () => this.act({ type: 'discard', seat: 0, tile: hit.tile }))
+      }
+      this.content.addChild(view)
+    }
+  }
+
+  /** 把原本在中央面板的 成/杠/碰/过 收到操作条，避免挡牌河 */
+  private appendDock3DActions(items: Array<Laya.Sprite | Laya.Text>, hand: HandState, myTurn: boolean) {
+    if (this.phase !== 'playing' || hand.phase === 'over' || !myTurn) return
+    const actions = legalActions(hand, 0)
+    if (hand.phase === 'claim') {
+      for (const action of actions) {
+        if (action.type === 'pass') {
+          items.push(makeButton({
+            width: this.u(34), height: this.u(24), label: '过', fontSize: this.u(10), face: 'chip',
+            onClick: () => this.act(action)
+          }))
+        } else if (action.type === 'claim') {
+          items.push(makeButton({
+            width: this.u(38), height: this.u(24), label: action.claim, fontSize: this.u(10), face: 'tile',
+            onClick: () => this.act(action)
+          }))
+        } else if (action.type === 'win') {
+          items.push(makeButton({
+            width: this.u(38), height: this.u(24), label: '成', fontSize: this.u(10), face: 'tile',
+            onClick: () => this.act(action)
+          }))
+        }
+      }
+      return
+    }
+    if (hand.phase !== 'discard') return
+    const winAction = actions.find((action): action is Extract<RoundAction, { type: 'win' }> => action.type === 'win')
+    if (winAction && !this.declinedWin) {
+      items.push(makeButton({
+        width: this.u(38), height: this.u(24), label: '成', fontSize: this.u(10), face: 'tile',
+        onClick: () => this.act(winAction)
+      }))
+      items.push(makeButton({
+        width: this.u(38), height: this.u(24), label: '打', fontSize: this.u(10), face: 'chip',
+        onClick: () => { this.declinedWin = true; this.render() }
+      }))
+      return
+    }
+    for (const action of actions) {
+      if (action.type !== 'kong') continue
+      items.push(makeButton({
+        width: this.u(50), height: this.u(24), label: `杠${action.tile}`, fontSize: this.u(9), face: 'chip',
+        onClick: () => this.act(action)
+      }))
+    }
+  }
 
   private renderDock() {
     const m = this.m
@@ -1422,6 +1660,7 @@ export class TableView {
       items.push(makeText('掷骰…', { size: this.u(11), color: COLORS.mist, width: this.u(60), height: this.u(16) }))
     }
 
+    if (this.is3D()) this.appendDock3DActions(items, hand, myTurn)
     this.renderDockBar(items)
 
     if (this.phase === 'playing' && hand.phase !== 'over') {
