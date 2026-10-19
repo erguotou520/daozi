@@ -22,13 +22,11 @@ export interface LastMark {
   h: number
 }
 
-const TILE_W = 60
-const TILE_H = 86
-const TILE_T = 28
+const TILE_W = 54
+const TILE_H = 78
+const TILE_T = 26
 /** 牌背玉绿：比桌面亮很多，扣着的牌从深绿桌面上跳出来 */
 const TILE_BACK = '#4CAF87'
-/** 牌墙用同一族的绿、暗一档：它平躺在桌上，要比立着的手牌退后一点 */
-const WALL_BACK = '#369470'
 const TABLE_W = 1280
 /** 桌面进深：牌墙是平躺的真牌（进深一张牌高 86），桌面太浅左右两条墙就塞不下 */
 const TABLE_D = 1080
@@ -42,12 +40,13 @@ const HAND_Z_SELF = TABLE_D / 2 - HAND_EDGE_GAP - TILE_T / 2
 const HAND_Z_OPP = -HAND_Z_SELF
 const HAND_X_SIDE = TABLE_W / 2 - HAND_EDGE_GAP - TILE_T / 2
 /**
- * 牌墙：一墩就是一张平躺的牌。17 墩 × 牌宽 60 = 1020，和手里的牌完全同尺寸，
- * 不再单独做一套「又细又小」的牌墙模型（那套比手牌小一半，看着不像牌）。
+ * 牌墙：一墩就是一张平躺的牌，和手里的是同一个模型、同一套尺寸；
+ * 不再单独做一套「又细又小」的牌墙（那套比手牌小一半，看着不像牌）。
  */
 const STACKS = 17
-const WALL_STEP = TILE_W
-const WALL_LEN = TILE_W - 2.5
+/** 一整条牌墙的墩距固定 60：牌宽 54，所以 17 墩之间每墩空出 6 的缝，不会叠在一起 */
+const WALL_STEP = 60
+const WALL_LEN = TILE_W
 const WALL_SPAN = STACKS * WALL_STEP
 /** 牌墙 / 副露 / 牌河的摆放线（离桌心的距离），由外向内依次是 手牌 → 牌墙 → 副露 → 牌河 */
 const WALL_Z = 430
@@ -358,15 +357,20 @@ export class Table3D {
   }
 
   /**
-   * 一张牌的三维模型——全桌只有这一种：
-   *   立着（手牌）= 牌宽 × 牌高 × 牌厚
-   *   平躺（牌河 / 副露 / 牌墙）= 牌宽 × 牌厚 × 牌高
-   * 亮着的牌是象牙白牌身 + 正面牌面贴图；扣着的牌整只玉绿。
+   * 一张牌：整只是同一个外形（牌宽 × 牌高 × 牌厚），由两段拼成——
+   * 厚度方向靠**背面 30%** 是玉绿（牌背），靠**正面 70%** 是象牙白（牌身，正面贴牌面）。
    *
-   * 早先把牌拆成「背面 30% 绿 + 牌身 70% 白」两段长方体，
-   * 想用一条绿边把牌和桌面分开——结果从俯视角度看手牌，
-   * 牌顶会多出一条绿棱（自家牌顶上两种绿），三家的牌身又会露出大白面。
-   * 现在亮牌整只白、扣牌整只绿，顶面颜色跟着牌的身份走，不会再混。
+   * 所以同一张牌站在不同位置，看到的东西不一样：
+   * - 朝向自己的牌：看到白色牌面；
+   * - 别人家的牌：看到绿色牌背，牌顶上是一条绿 + 一条白。
+   *
+   * 三种摆法都走这一个函数，只是整组绕 X 轴翻倒，保证「绿背在背面、白身在正面」不变：
+   * - stand     立着（手牌）
+   * - flatUp    平躺、牌面朝上（牌河 / 副露）
+   * - flatDown  平躺、牌背朝上（牌墙）
+   *
+   * 注意：牌面贴图里不要再画绿顶带——绿背已经由牌体那 30% 提供了，
+   * 贴图上再画一条绿，手牌顶上就会叠出「两种绿」。
    */
   private addTileBody(
     tile: Tile | null,
@@ -374,52 +378,55 @@ export class Table3D {
     y: number,
     z: number,
     parent: Laya.Sprite3D,
-    standing: boolean,
+    mode: 'stand' | 'flatUp' | 'flatDown',
     rotY = 0
   ): Laya.Sprite3D {
+    // 外层节点只负责水平转向（左右两条牌墙要转 90°），内层负责翻倒。
+    // 分成两个节点做，旋转顺序才是确定的：先翻倒，再水平转，不会受欧拉角顺序影响。
     const group = new Laya.Sprite3D()
     group.transform.position = new Laya.Vector3(x, y, z)
     group.transform.rotationEuler = new Laya.Vector3(0, rotY, 0)
     parent.addChild(group)
 
-    const w = TILE_W
-    const h = standing ? TILE_H : TILE_T
-    const d = standing ? TILE_T : TILE_H
-    // 牌身：亮牌象牙白，扣牌玉绿（扣牌的六个面都是绿的，从上/侧看都是牌背）
-    this.addRounded(w, h, d, 2.4, this.bodyMaterial(tile ? COLORS.ivory : TILE_BACK), 0, 0, 0, group)
+    const rotX = mode === 'stand' ? 0 : mode === 'flatUp' ? -90 : 90
+    const body = new Laya.Sprite3D()
+    body.transform.rotationEuler = new Laya.Vector3(rotX, 0, 0)
+    group.addChild(body)
+
+    const greenT = TILE_T * 0.3
+    const whiteT = TILE_T - greenT
+    // 绿背：厚度靠后那 30%
+    this.addRounded(TILE_W, TILE_H, greenT, 2.2, this.bodyMaterial(TILE_BACK), 0, 0, -TILE_T / 2 + greenT / 2, body)
+    // 白身：其余 70%，往绿背方向多咬 0.5 防接缝漏光
+    this.addRounded(
+      TILE_W,
+      TILE_H,
+      whiteT + 0.5,
+      2.2,
+      this.bodyMaterial(COLORS.ivory),
+      0,
+      0,
+      TILE_T / 2 - whiteT / 2 - 0.25,
+      body
+    )
     if (!tile) return group
 
-    // 牌面贴图：立着贴在正面（+z），平躺贴在顶面（+y，绕 X 轴翻平）
-    if (standing) {
-      this.addRounded(
-        w - 1.5,
-        h - 1.5,
-        1.6,
-        0.8,
-        this.faceMaterial(this.faceTexture(tile)),
-        0,
-        0,
-        TILE_T / 2 + 0.8,
-        group
-      )
-    } else {
-      this.addRounded(
-        w - 1.5,
-        d - 1.5,
-        1.6,
-        0.8,
-        this.faceMaterial(this.faceTexture(tile)),
-        0,
-        TILE_T / 2 + 0.8,
-        0,
-        group,
-        -90
-      )
-    }
+    // 牌面贴图贴在白身正面（局部 +z）；平躺时跟着整组一起翻到顶面
+    this.addRounded(
+      TILE_W - 1.5,
+      TILE_H - 1.5,
+      1.6,
+      0.8,
+      this.faceMaterial(this.faceTexture(tile)),
+      0,
+      0,
+      TILE_T / 2 + 0.8,
+      body
+    )
     return group
   }
 
-  /** 立着的牌：自家 / 对家 / 左右家手牌。faceUp=false 时整只是绿牌背 */
+  /** 立着的牌：自家 / 对家 / 左右家手牌。faceUp=false 时绿背朝相机 */
   private addStandingTile(
     tile: Tile,
     x: number,
@@ -429,17 +436,18 @@ export class Table3D {
     parent: Laya.Sprite3D,
     rotationY = 0
   ) {
-    this.addTileBody(faceUp ? tile : null, x, y, z, parent, true, rotationY)
+    this.addTileBody(faceUp ? tile : null, x, y, z, parent, 'stand', rotationY)
   }
 
   /** 平躺的牌：弃牌、副露。牌面朝上 */
   private addFlatTile(tile: Tile, x: number, z: number, parent: Laya.Sprite3D, rotationY = 0): Laya.Sprite3D {
-    return this.addTileBody(tile, x, TILE_T / 2 + 2, z, parent, false, rotationY)
+    return this.addTileBody(tile, x, TILE_T / 2 + 2, z, parent, 'flatUp', rotationY)
   }
 
   /**
-   * 牌墙：一墩就是两张平躺的牌叠在一起（牌背朝上、整墩玉绿）。
-   * 尺寸和手里的牌完全一样：沿桌边 = 牌宽，垂直桌边 = 牌高，每层 = 牌厚。
+   * 牌墙：一墩就是两张平躺的牌叠在一起，牌背朝上。
+   * 和手里的牌是同一个模型：沿桌边 = 牌宽、垂直桌边 = 牌高、每层 = 牌厚。
+   * 17 墩 × 墩距 60 = 1020，牌宽 54，所以每墩之间空 6，能一张一张数出来。
    */
   private addWall(visual: Array<Array<[boolean, boolean]>>) {
     const half = WALL_SPAN / 2
@@ -454,12 +462,12 @@ export class Table3D {
             // 上下两条墙：沿 x 排，进深朝 z
             const x = -half + i * WALL_STEP + WALL_STEP / 2
             const z = seat === 2 ? -WALL_Z : WALL_Z
-            this.addRounded(WALL_LEN, TILE_T, TILE_H, 2.4, this.bodyMaterial(WALL_BACK), x, y, z, this.dynamicRoot)
+            this.addTileBody(null, x, y, z, this.dynamicRoot, 'flatDown')
           } else {
             // 左右两条墙：整墩转 90°，沿 z 排，进深朝 x
             const x = seat === 3 ? -WALL_X : WALL_X
             const z = -half + i * WALL_STEP + WALL_STEP / 2
-            this.addRounded(TILE_H, TILE_T, WALL_LEN, 2.4, this.bodyMaterial(WALL_BACK), x, y, z, this.dynamicRoot)
+            this.addTileBody(null, x, y, z, this.dynamicRoot, 'flatDown', 90)
           }
         }
       }
@@ -474,7 +482,7 @@ export class Table3D {
   ) {
     if (!tiles.length) return
     // 牌与牌留 2 的缝：不留缝时一排牌会糊成一条，看不出几张
-    const step = Math.min(TILE_W + 2, 960 / Math.max(1, tiles.length))
+    const step = Math.min(TILE_W + 3, 960 / Math.max(1, tiles.length))
     const startX = -((tiles.length - 1) * step) / 2
     for (let i = 0; i < tiles.length; i += 1) {
       const tile = tiles[i]
@@ -489,11 +497,10 @@ export class Table3D {
       } else {
         const z = startX + i * step
         const x = seat === 3 ? -HAND_X_SIDE : HAND_X_SIDE
-        // 相机在本家右后上方，看左右两家时是从斜前方看过去：
-        // 必须让「绿背」朝向相机这一侧，否则相机看到的是白身那一整面（60×86），
-        // 屏幕上就是一大片白，像把牌面亮出来了。
-        //   左家（x 负）→ 绿背朝 +x；右家（x 正）→ 绿背朝 -x。
-        // 亮牌时反过来，让牌面朝桌心。
+        // 一张牌的「白面」永远朝向它的主人：
+        //   左家（x 负）白面朝 -x → 扣着时整组转 -90，牌背朝 +x（相机这一侧）；
+        //   右家（x 正）白面朝 +x → 扣着时整组转 +90，牌背朝 -x。
+        // 亮牌时反过来，让白面转向相机。
         const rot = seat === 3 ? (faceUp ? 90 : -90) : faceUp ? -90 : 90
         this.addStandingTile(tile, x, TILE_H / 2 + 2, z, faceUp, this.dynamicRoot, rot)
       }
