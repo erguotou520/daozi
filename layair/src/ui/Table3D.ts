@@ -29,8 +29,8 @@ const FLAT_W = 38
 const FLAT_D = 50
 const TABLE_W = 1280
 const TABLE_D = 900
-const SELF_HAND_Z = TABLE_D / 2 - 90
-const WALL_SIDE = 650
+const SELF_HAND_Z = TABLE_D / 2 - 120
+const WALL_SIDE = 600
 const STACKS = 17
 const WALL_STEP = WALL_SIDE / STACKS
 const WALL_LEN = WALL_STEP - 0.8
@@ -90,7 +90,7 @@ export class Table3D {
     this.camera.cullingMask = 0xffffffff
     this.camera.nearPlane = 1
     this.camera.farPlane = 4000
-    this.camera.fieldOfView = 39
+    this.camera.fieldOfView = 40
     this.camera.transform.position = new Laya.Vector3(0, 1120, 1200)
     this.camera.transform.rotationEuler = new Laya.Vector3(-37, 0, 0)
 
@@ -344,8 +344,8 @@ export class Table3D {
 
     if (faceUp) {
       this.addRounded(
-        TILE_W - 3.5,
-        TILE_H - 3.5,
+        TILE_W - 1.5,
+        TILE_H - 1.5,
         1.7,
         0.85,
         this.faceMaterial(this.faceTexture(tile, false)),
@@ -358,8 +358,8 @@ export class Table3D {
       // 牌背：白顶 + 绿色牌背，牌背朝相机
       this.addRounded(TILE_W, 3, TILE_T, 1.2, this.bodyMaterial(COLORS.ivory), 0, TILE_H / 2 - 1.5, 0, group)
       this.addRounded(
-        TILE_W - 3.5,
-        TILE_H - 8,
+        TILE_W - 1.5,
+        TILE_H - 5,
         1.7,
         0.85,
         this.bodyMaterial('#3C9374'),
@@ -381,8 +381,8 @@ export class Table3D {
     this.addRounded(FLAT_W, 11, FLAT_D, 3.6, this.bodyMaterial(COLORS.ivory), 0, 0, 0, group)
     // 用竖牌面板绕 X 轴翻平，正面贴图自然朝上
     this.addRounded(
-      FLAT_W - 3,
-      FLAT_D - 3,
+      FLAT_W - 1.5,
+      FLAT_D - 1.5,
       1.7,
       0.8,
       this.faceMaterial(this.faceTexture(tile, true)),
@@ -425,7 +425,7 @@ export class Table3D {
     drawnIndex = -1
   ) {
     if (!tiles.length) return
-    const step = Math.min(TILE_W + 2, 940 / Math.max(1, tiles.length))
+    const step = Math.min(TILE_W, 940 / Math.max(1, tiles.length))
     const startX = -((tiles.length - 1) * step) / 2
     for (let i = 0; i < tiles.length; i += 1) {
       const tile = tiles[i]
@@ -446,7 +446,7 @@ export class Table3D {
 
   private addMelds(seat: number, player: HandState['players'][number]) {
     if (!player.melds.length) return
-    const flatGap = FLAT_W + 1.6
+    const flatGap = FLAT_W + 1
     let cursor = 0
     for (const meld of player.melds) {
       const tiles = meldTiles(meld)
@@ -461,12 +461,12 @@ export class Table3D {
           z = -260
         } else if (seat === 3) {
           x = -560
-          z = 250 - cursor * flatGap
+          z = 250 - cursor * FLAT_D
         } else {
           x = 560
-          z = 250 - cursor * flatGap
+          z = 250 - cursor * FLAT_D
         }
-        this.addFlatTile(tile, x, z, this.dynamicRoot)
+        this.addFlatTile(tile, x, z, this.dynamicRoot, seat === 3 ? 90 : seat === 1 ? -90 : 0)
         cursor += 1
       }
       cursor += 0.5
@@ -476,7 +476,7 @@ export class Table3D {
   private addDiscards(seat: number, tiles: Tile[]) {
     if (!tiles.length) return
     const last = this.hand?.lastPlayed
-    const step = 64
+    const step = 52
     const maxCols = seat === 0 || seat === 2 ? 8 : 7
     for (let i = 0; i < tiles.length; i += 1) {
       const tile = tiles[i]
@@ -492,12 +492,12 @@ export class Table3D {
         x = maxCols * step / 2 - col * step
         z = -180 + line * step
       } else if (seat === 3) {
-        x = -430 - line * 90
-        z = -100 + col * 68
+        x = -430 - line * 54
+        z = -100 + col * 52
         rotation = 90
       } else {
-        x = 430 + line * 90
-        z = 100 - col * 68
+        x = 430 + line * 54
+        z = 100 - col * 52
         rotation = -90
       }
       const node = this.addFlatTile(tile, x, z, this.dynamicRoot, rotation)
