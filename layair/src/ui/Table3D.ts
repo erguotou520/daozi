@@ -29,13 +29,13 @@ const TILE_T = 26
 const TILE_BACK = '#4CAF87'
 const TABLE_W = 1280
 /** 桌面进深：牌墙是平躺的真牌（进深一张牌高 86），桌面太浅左右两条墙就塞不下 */
-const TABLE_D = 1080
+const TABLE_D = 1280
 /**
  * 手牌离桌沿的留白：四家统一一张牌厚（TILE_T）。
  * 牌是立着的，沿「朝向桌心」那个轴的厚度就是 TILE_T，
  * 所以牌体中心 = 桌沿 - 留白 - TILE_T / 2。
  */
-const HAND_EDGE_GAP = TILE_W
+const HAND_EDGE_GAP = TILE_W / 2
 const HAND_Z_SELF = TABLE_D / 2 - HAND_EDGE_GAP - TILE_T / 2
 const HAND_Z_OPP = -HAND_Z_SELF
 const HAND_X_SIDE = TABLE_W / 2 - HAND_EDGE_GAP - TILE_T / 2
@@ -49,13 +49,10 @@ const WALL_STEP = TILE_W
 const WALL_LEN = TILE_W
 const WALL_SPAN = STACKS * WALL_STEP
 /** 牌墙 / 副露 / 牌河的摆放线（离桌心的距离），由外向内依次是 手牌 → 牌墙 → 副露 → 牌河 */
-const WALL_Z = 500
-const WALL_X = 600
-const WALL_Z_SELF = 300
-const MELD_Z = 315
-const MELD_X = 315
-const DISCARD_Z = 195
-const DISCARD_X = 195
+const WALL_Z = 494
+const WALL_X = 494
+const WALL_Z_SELF = 494
+const DISCARD_R0 = 416
 
 function hexColor(hex: string, alpha = 1): Laya.Color {
   const value = hex.replace('#', '')
@@ -123,9 +120,9 @@ export class Table3D {
     this.camera.nearPlane = 1
     // 固定相机稍收窄，保证自己的手牌清楚，同时整桌和四家牌河都在画面内。
     this.camera.farPlane = 16000
-    this.camera.fieldOfView = 46
-    this.camera.transform.position = new Laya.Vector3(0, 900, 1200)
-    this.camera.transform.rotationEuler = new Laya.Vector3(-42, 0, 0)
+    this.camera.fieldOfView = 50
+    this.camera.transform.position = new Laya.Vector3(0, 900, 1150)
+    this.camera.transform.rotationEuler = new Laya.Vector3(-48, 0, 0)
 
     this.tableRoot = new Laya.Sprite3D()
     this.dynamicRoot = new Laya.Sprite3D()
@@ -520,17 +517,17 @@ export class Table3D {
         let x = 0
         let z = 0
         if (seat === 0) {
-          x = 260 - cursor * flatGap
-          z = MELD_Z
+          x = 400 + cursor * flatGap
+          z = HAND_Z_SELF
         } else if (seat === 2) {
-          x = -260 + cursor * flatGap
-          z = -MELD_Z
+          x = -400 - cursor * flatGap
+          z = HAND_Z_OPP
         } else if (seat === 3) {
-          x = -MELD_X
-          z = 260 - cursor * flatGap
+          x = -HAND_X_SIDE
+          z = 400 + cursor * flatGap
         } else {
-          x = MELD_X
-          z = 260 - cursor * flatGap
+          x = HAND_X_SIDE
+          z = -400 - cursor * flatGap
         }
         this.addFlatTile(tile, x, z, this.dynamicRoot, seat === 3 ? 90 : seat === 1 ? -90 : 0)
         cursor += 1
@@ -542,37 +539,47 @@ export class Table3D {
   private addDiscards(seat: number, tiles: Tile[]) {
     if (!tiles.length) return
     const last = this.hand?.lastPlayed
-    // 牌与牌紧挨着（step = 牌宽/深，不留缝）。
-    // 左右家整块转 90°，宽深互换，所以 col 走 z、line 走 x。
-    const colStep = TILE_W
-    const lineStep = TILE_H
-    const maxCols = 8
+    const step = TILE_H
+    const maxCols = 13
+    let row = 0
+    let col = 0
+    const colsForRow = (r: number) => {
+      const radial = DISCARD_R0 - r * step
+      const sideInner = radial - TILE_H / 2 - 2
+      return Math.min(maxCols, Math.max(1, Math.floor((sideInner * 2) / TILE_W)))
+    }
+
     for (let i = 0; i < tiles.length; i += 1) {
+      while (col >= colsForRow(row)) {
+        row += 1
+        col = 0
+      }
+      const cols = colsForRow(row)
+      const radial = DISCARD_R0 - row * step
       const tile = tiles[i]
-      const col = i % maxCols
-      const line = Math.floor(i / maxCols)
       let x = 0
       let z = 0
       let rotation = 0
       if (seat === 0) {
-        x = -((maxCols - 1) * colStep) / 2 + col * colStep
-        z = DISCARD_Z - line * lineStep
+        x = -((cols - 1) * TILE_W) / 2 + col * TILE_W
+        z = radial
       } else if (seat === 2) {
-        x = ((maxCols - 1) * colStep) / 2 - col * colStep
-        z = -DISCARD_Z + line * lineStep
+        x = ((cols - 1) * TILE_W) / 2 - col * TILE_W
+        z = -radial
       } else if (seat === 3) {
-        x = -DISCARD_X + line * lineStep
-        z = -((maxCols - 1) * colStep) / 2 + col * colStep
+        x = -radial
+        z = -((cols - 1) * TILE_W) / 2 + col * TILE_W
         rotation = 90
       } else {
-        x = DISCARD_X - line * lineStep
-        z = ((maxCols - 1) * colStep) / 2 - col * colStep
+        x = radial
+        z = ((cols - 1) * TILE_W) / 2 - col * TILE_W
         rotation = -90
       }
       this.addFlatTile(tile, x, z, this.dynamicRoot, rotation)
       if (last && last.seat === seat && last.tile === tile && i === tiles.length - 1) {
         this.lastMark = this.markFlatTile(x, z, rotation)
       }
+      col += 1
     }
   }
 
