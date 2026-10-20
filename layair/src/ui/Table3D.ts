@@ -35,9 +35,9 @@ const TABLE_D = 1080
  * 牌是立着的，沿「朝向桌心」那个轴的厚度就是 TILE_T，
  * 所以牌体中心 = 桌沿 - 留白 - TILE_T / 2。
  */
-const HAND_EDGE_GAP = TILE_T
-const HAND_Z_SELF = 380
-const HAND_Z_OPP = -380
+const HAND_EDGE_GAP = TILE_W
+const HAND_Z_SELF = TABLE_D / 2 - HAND_EDGE_GAP - TILE_T / 2
+const HAND_Z_OPP = -HAND_Z_SELF
 const HAND_X_SIDE = TABLE_W / 2 - HAND_EDGE_GAP - TILE_T / 2
 /**
  * 牌墙：一墩就是一张平躺的牌，和手里的是同一个模型、同一套尺寸；
@@ -49,8 +49,8 @@ const WALL_STEP = TILE_W
 const WALL_LEN = TILE_W
 const WALL_SPAN = STACKS * WALL_STEP
 /** 牌墙 / 副露 / 牌河的摆放线（离桌心的距离），由外向内依次是 手牌 → 牌墙 → 副露 → 牌河 */
-const WALL_Z = WALL_SPAN / 2
-const WALL_X = WALL_SPAN / 2
+const WALL_Z = 500
+const WALL_X = 600
 const WALL_Z_SELF = 300
 const MELD_Z = 315
 const MELD_X = 315
@@ -123,8 +123,8 @@ export class Table3D {
     this.camera.nearPlane = 1
     // 固定相机稍收窄，保证自己的手牌清楚，同时整桌和四家牌河都在画面内。
     this.camera.farPlane = 16000
-    this.camera.fieldOfView = 38
-    this.camera.transform.position = new Laya.Vector3(0, 1260, 1380)
+    this.camera.fieldOfView = 46
+    this.camera.transform.position = new Laya.Vector3(0, 900, 1200)
     this.camera.transform.rotationEuler = new Laya.Vector3(-42, 0, 0)
 
     this.tableRoot = new Laya.Sprite3D()
