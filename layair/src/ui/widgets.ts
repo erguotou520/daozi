@@ -229,36 +229,17 @@ export class TileView extends Laya.Sprite {
    * 摊在桌面上的牌（牌河 / 副露 / 打出的牌）。
    * 看的是牌面本身，右侧和下侧露出一点厚度，外圈压黑线。
    */
+  /** 摊在桌面上的牌（牌河 / 副露）：和立牌同一套画法——长方形 + 顶部厚度带 */
   private drawFlat(tile: string, w: number, h: number, back: boolean) {
     const g = this.graphics
-    const edge = Math.max(2, Math.round(h * 0.09))
-    const topW = w - edge
-    const topH = h - edge
-    const r = Math.max(3, Math.round(w * 0.09))
-    const black = '#06100C'
-    const face = back ? '#2C7459' : '#F2E7CE'
-    const light = back ? '#3C9374' : '#FBF4E2'
-    const dark = back ? '#1F553F' : '#E4D3B0'
-
-    g.drawRoundRect(2, 3, topW, topH, r, r, r, r, 'rgba(2,10,7,0.34)')
-    g.drawRoundRect(0, 0, w, h, r, r, r, r, '#07110D')
-    // 底面厚度
-    g.drawRect(topW - 1, edge, edge + 1, topH, back ? '#1B4A37' : '#D2BF98')
-    g.drawRect(edge, topH - 1, topW, edge + 1, back ? '#173D2D' : '#C8B48C')
-    // 牌面
-    g.drawRoundRect(0, 0, topW, topH, r, r, r, r, face, black, 1.6)
-    if (back) {
-      g.drawRect(2, 2, topW - 4, Math.max(1, topH * 0.44), light)
-      g.drawRect(2, 2, topW - 4, Math.max(1, topH * 0.05), 'rgba(255,255,255,0.3)')
-      g.drawRoundRect(1.5, 1.5, topW - 3, topH - 3, Math.max(2, r - 1), Math.max(2, r - 1), Math.max(2, r - 1), Math.max(2, r - 1), null as any, 'rgba(185,235,210,0.22)', 1)
-    } else {
-      g.drawRect(2, 2, topW - 4, Math.max(1, topH * 0.36), light)
-      g.drawRect(2, 2 + topH * 0.36, topW - 4, Math.max(1, topH * 0.5), '#F7EEDA')
-      g.drawRect(2, 2 + topH * 0.86, topW - 4, Math.max(1, topH * 0.12), dark)
-      g.drawRect(2, 2, topW - 4, Math.max(1, topH * 0.025), 'rgba(255,255,255,0.95)')
-      g.drawRoundRect(1.5, 1.5, topW - 3, topH - 3, Math.max(2, r - 1), Math.max(2, r - 1), Math.max(2, r - 1), Math.max(2, r - 1), null as any, 'rgba(143,120,82,0.42)', 1)
-      this.drawTileText(tile, topW, 0, topH)
-    }
+    const depth = Math.max(3, Math.round(h * 0.15))
+    const greenH = Math.max(1, Math.round(depth * 0.3))
+    const whiteH = depth - greenH
+    g.drawRect(0, 0, w, greenH, '#2F7A5E')
+    g.drawRect(0, greenH, w, whiteH, '#FDF9EF')
+    g.drawRect(0, depth, w, h - depth, back ? '#2C7459' : '#F2E7CE')
+    g.drawRect(w - 1, 0, 1, h, 'rgba(120,100,70,0.2)')
+    if (!back) this.drawTileText(tile, w, depth, h - depth)
   }
 
   private drawTileText(tile: string, faceW: number, y: number, faceH: number) {
@@ -277,13 +258,14 @@ export class TileView extends Laya.Sprite {
           align: 'center',
           valign: 'middle',
           width: textW,
-          height: faceH,
+          height: faceH * 0.92,
           x: 2,
           y
         })
       )
     } else {
       const rank = tile.charAt(0)
+      // 数字 + 汉字之间别再拉那么开，整体往上提一点，别贴底
       this.addChild(
         makeText(rank, {
           size: textW * 0.5,
@@ -293,21 +275,21 @@ export class TileView extends Laya.Sprite {
           align: 'center',
           valign: 'middle',
           width: textW,
-          height: faceH * 0.72,
+          height: faceH * 0.58,
           x: 2,
           y
         })
       )
       const suitText = makeText(suit, {
-        size: textW * 0.27,
+        size: textW * 0.26,
         color,
         bold: true,
         align: 'center',
         valign: 'middle',
         width: textW,
-        height: faceH * 0.28,
+        height: faceH * 0.26,
         x: 2,
-        y: y + faceH * 0.72
+        y: y + faceH * 0.56
       })
       suitText.alpha = 0.9
       this.addChild(suitText)
