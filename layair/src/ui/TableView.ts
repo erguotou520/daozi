@@ -1463,27 +1463,6 @@ export class TableView {
       )
     }
 
-    // 只框最后打出的那一张牌；四角由 3D 顶面投影，侧家旋转后也不会框错
-    const mark = this.three?.lastMark
-    if (mark && mark.w > 0 && mark.h > 0) {
-      const gx = mark.x - m.boardX
-      const gy = mark.y - m.boardY
-      const x0 = Math.round(gx)
-      const y0 = Math.round(gy)
-      const x1 = x0 + Math.round(mark.w)
-      const y1 = y0 + Math.round(mark.h)
-      const lw = 3
-      const arm = Math.max(6, Math.min(16, Math.round(Math.min(mark.w, mark.h) * 0.35)))
-      const g = this.content.graphics
-      g.drawLine(x0, y0, x0 + arm, y0, '#F5C542', lw)
-      g.drawLine(x0, y0, x0, y0 + arm, '#F5C542', lw)
-      g.drawLine(x1, y0, x1 - arm, y0, '#F5C542', lw)
-      g.drawLine(x1, y0, x1, y0 + arm, '#F5C542', lw)
-      g.drawLine(x0, y1, x0 + arm, y1, '#F5C542', lw)
-      g.drawLine(x0, y1, x0, y1 - arm, '#F5C542', lw)
-      g.drawLine(x1, y1, x1 - arm, y1, '#F5C542', lw)
-      g.drawLine(x1, y1, x1, y1 - arm, '#F5C542', lw)
-    }
 
   }
 

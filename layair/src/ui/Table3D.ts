@@ -101,6 +101,7 @@ export class Table3D {
   private diceRoot: Laya.Sprite3D | null = null
   private faceCache = new Map<string, Laya.Texture2D>()
   private roundedCache = new Map<string, Laya.Mesh>()
+  private _highlightMat: Laya.UnlitMaterial | null = null
   private bodyCache = new Map<string, Laya.BlinnPhongMaterial>()
   private worldW: number
   private worldH: number
@@ -120,9 +121,9 @@ export class Table3D {
     this.camera.nearPlane = 1
     // 固定相机稍收窄，保证自己的手牌清楚，同时整桌和四家牌河都在画面内。
     this.camera.farPlane = 16000
-    this.camera.fieldOfView = 38
-    this.camera.transform.position = new Laya.Vector3(0, 850, 1050)
-    this.camera.transform.rotationEuler = new Laya.Vector3(-58, 0, 0)
+    this.camera.fieldOfView = 42
+    this.camera.transform.position = new Laya.Vector3(0, 520, 1450)
+    this.camera.transform.rotationEuler = new Laya.Vector3(-28, 0, 0)
 
     this.tableRoot = new Laya.Sprite3D()
     this.dynamicRoot = new Laya.Sprite3D()
@@ -376,7 +377,8 @@ export class Table3D {
     z: number,
     parent: Laya.Sprite3D,
     mode: 'stand' | 'flatUp' | 'flatDown',
-    rotY = 0
+    rotY = 0,
+    highlight = false
   ): Laya.Sprite3D {
     // 外层节点只负责水平转向（左右两条牌墙要转 90°），内层负责翻倒。
     // 分成两个节点做，旋转顺序才是确定的：先翻倒，再水平转，不会受欧拉角顺序影响。
@@ -420,7 +422,37 @@ export class Table3D {
       TILE_T / 2 + 0.8,
       body
     )
+    if (highlight) this.addTileHighlight(group)
     return group
+  }
+
+  /** 给一张平躺的牌加 3D 黄色描边：垫一层略大的亮黄色底板，只露出边 */
+  private addTileHighlight(group: Laya.Sprite3D) {
+    const mat = this.highlightMaterial()
+    // 牌底垫一层金色边框
+    this.addRounded(TILE_W + 6, 1.4, TILE_H + 6, 2.2, mat, 0, -TILE_T / 2 - 0.6, 0, group)
+    // 牌顶四边再压一圈金边，低视角也能看见
+    const y = TILE_T / 2 + 0.8
+    this.addRounded(TILE_W + 4, 1.2, 2.4, 0.8, mat, 0, y, TILE_H / 2 + 1.4, group)
+    this.addRounded(TILE_W + 4, 1.2, 2.4, 0.8, mat, 0, y, -TILE_H / 2 - 1.4, group)
+    this.addRounded(2.4, 1.2, TILE_H + 4, 0.8, mat, TILE_W / 2 + 1.4, y, 0, group)
+    this.addRounded(2.4, 1.2, TILE_H + 4, 0.8, mat, -TILE_W / 2 - 1.4, y, 0, group)
+  }
+
+  private highlightMaterial(): Laya.UnlitMaterial {
+    if (this._highlightMat) return this._highlightMat
+    const hc = new Laya.HTMLCanvas(true)
+    hc.size(4, 4)
+    const ctx = hc.context
+    ctx.fillStyle = '#F5C542'
+    ctx.fillRect(0, 0, 4, 4)
+    const tex = new Laya.Texture2D(4, 4, Laya.TextureFormat.R8G8B8A8, false, false, true, false)
+    tex.setImageData(hc.source, false, false)
+    const mat = new Laya.UnlitMaterial()
+    mat.albedoTexture = tex
+    mat.renderMode = Laya.MaterialRenderMode.RENDERMODE_OPAQUE
+    this._highlightMat = mat
+    return mat
   }
 
   /** 立着的牌：自家 / 对家 / 左右家手牌。faceUp=false 时绿背朝相机 */
@@ -437,8 +469,8 @@ export class Table3D {
   }
 
   /** 平躺的牌：弃牌、副露。牌面朝上 */
-  private addFlatTile(tile: Tile, x: number, z: number, parent: Laya.Sprite3D, rotationY = 0): Laya.Sprite3D {
-    return this.addTileBody(tile, x, TILE_T / 2 + 2, z, parent, 'flatUp', rotationY)
+  private addFlatTile(tile: Tile, x: number, z: number, parent: Laya.Sprite3D, rotationY = 0, highlight = false): Laya.Sprite3D {
+    return this.addTileBody(tile, x, TILE_T / 2 + 2, z, parent, 'flatUp', rotationY, highlight)
   }
 
   /**
@@ -575,10 +607,8 @@ export class Table3D {
         z = ((cols - 1) * TILE_W) / 2 - col * TILE_W
         rotation = -90
       }
-      this.addFlatTile(tile, x, z, this.dynamicRoot, rotation)
-      if (last && last.seat === seat && last.tile === tile && i === tiles.length - 1) {
-        this.lastMark = this.markFlatTile(x, z, rotation)
-      }
+      const isLast = !!last && last.seat === seat && last.tile === tile && i === tiles.length - 1
+      this.addFlatTile(tile, x, z, this.dynamicRoot, rotation, isLast)
       col += 1
     }
   }
