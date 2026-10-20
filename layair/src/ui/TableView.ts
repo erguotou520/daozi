@@ -596,13 +596,15 @@ export class TableView {
     }
     const m = this.m
     const rolling = this.phase === 'rolling'
-    // 骰子固定在桌面右上角：掷的时候大一点，落定后小一号
-    const size = Math.round(this.u(rolling ? 44 : 24))
+    // 骰子跟着中央提示面板走：放在面板右上角（不是屏幕右上角，别挡住退出按钮）
+    const size = Math.round(this.u(rolling ? 40 : 22))
     const gap = Math.round(size * 0.18)
     const scale = size / 60
     const totalW = size * 2 + gap
-    const x0 = Math.round(m.boardW - this.u(10) - totalW)
-    const y = Math.round(this.u(6))
+    const px = m.boardW / 2 - m.panelW / 2
+    const py = m.boardH / 2 - m.panelH / 2
+    const x0 = Math.round(px + m.panelW - totalW - this.u(6))
+    const y = Math.round(py - size - this.u(2))
     for (let i = 0; i < this.diceViews.length; i += 1) {
       const view = this.diceViews[i]
       view.scale(scale, scale)
@@ -1833,8 +1835,8 @@ export class TableView {
       side3D
         ? Math.min(m.boardW * 0.3, this.u(250))
         : m.landscape
-          ? Math.min(m.boardW * 0.5, this.u(300))
-          : Math.min(m.boardW * 0.68, this.u(380))
+          ? Math.min(m.boardW * 0.36, this.u(216))
+          : Math.min(m.boardW * 0.56, this.u(300))
     )
     let px = side3D
       ? Math.round(m.boardW - panelW - this.u(12))
@@ -1843,7 +1845,7 @@ export class TableView {
     if (!win) {
       const panelH = this.u(110)
       const py = side3D ? Math.round(m.boardY + this.u(8)) : Math.round(m.boardH / 2 - panelH / 2)
-      const panel = makePanel(panelW, panelH, this.u(14), 'rgba(8,30,24,0.97)', 'rgba(217,180,95,0.4)', 1.5)
+      const panel = makePanel(panelW, panelH, this.u(14), 'rgba(8,30,24,0.66)', 'rgba(217,180,95,0.28)', 1)
       panel.pos(px, py)
       this.content.addChild(panel)
       this.content.addChild(
@@ -1878,7 +1880,7 @@ export class TableView {
       py = Math.round(m.ringY + Math.max(0, (maxH - panelH) / 2))
     }
 
-    const panel = makePanel(panelW, panelH, this.u(14), 'rgba(8,30,24,0.96)', 'rgba(217,180,95,0.4)', 1.5)
+    const panel = makePanel(panelW, panelH, this.u(14), 'rgba(8,30,24,0.66)', 'rgba(217,180,95,0.28)', 1)
     panel.pos(px, py)
     this.content.addChild(panel)
 
@@ -2053,14 +2055,14 @@ export class TableView {
     const summary = this.roundSummary
     const dim = new Laya.Sprite()
     dim.size(m.W, m.H)
-    dim.graphics.drawRect(0, 0, m.W, m.H, 'rgba(4,18,14,0.88)')
+    dim.graphics.drawRect(0, 0, m.W, m.H, 'rgba(4,18,14,0.6)')
     this.overlay.addChild(dim)
 
-    const panelW = Math.round(Math.min(m.W - this.u(40), this.u(360)))
-    const panelH = Math.round(Math.min(m.H - this.u(40), this.u(300)))
+    const panelW = Math.round(Math.min(m.W - this.u(40), this.u(320)))
+    const panelH = Math.round(Math.min(m.H - this.u(40), this.u(286)))
     const px = Math.round((m.W - panelW) / 2)
     const py = Math.round((m.H - panelH) / 2)
-    const panel = makePanel(panelW, panelH, this.u(16), 'rgba(9,34,27,0.98)', 'rgba(217,180,95,0.38)', 1.5)
+    const panel = makePanel(panelW, panelH, this.u(16), 'rgba(9,34,27,0.86)', 'rgba(217,180,95,0.32)', 1)
     panel.pos(px, py)
     this.overlay.addChild(panel)
 

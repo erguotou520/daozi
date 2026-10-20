@@ -428,6 +428,8 @@ interface HandAnalysis {
   isGrassOneColor: boolean
   isBuDongShou: boolean
   winTileRole: 'pair' | 'middle' | 'none'
+  /** 成牌张是「只能等这一张」的边张/卡张（12 等 3、89 等 7、46 等 5） */
+  winTileOnlyWait: boolean
 }
 
 function analyze(input: ScoreInput, rules: Rules): HandAnalysis {
@@ -560,6 +562,9 @@ function analyze(input: ScoreInput, rules: Rules): HandAnalysis {
 
   // 成牌张在拆解中的角色：将牌（单吊）或顺子中张（压当/卡张）
   let winTileRole: HandAnalysis['winTileRole'] = 'none'
+  // 只等一张的成牌张：卡张（4_6 等 5）和边张（12 等 3 / 89 等 7）。
+  // 两面（23 等 1、4）和单吊不算 —— 外面出完其中一张，还有别的牌能成。
+  let winTileOnlyWait = false
   const winTile = input.winTile ?? null
   if (winTile) {
     for (const d of decomp) {
@@ -569,11 +574,19 @@ function analyze(input: ScoreInput, rules: Rules): HandAnalysis {
       }
       for (const set of d.sets) {
         if (set.kind !== 'run') continue
-        const info = parseTile(set.tiles[1])
-        if (set.tiles[1] === winTile && info.rank >= 2 && info.rank <= 8) {
-          const left = parseTile(set.tiles[0])
-          const right = parseTile(set.tiles[2])
-          if (left.rank === info.rank - 1 && right.rank === info.rank + 1) winTileRole = 'middle'
+        const index = set.tiles.indexOf(winTile)
+        if (index < 0) continue
+        const ranks = set.tiles.map(tile => parseTile(tile).rank)
+        if (index === 1) {
+          // 卡张：只等中间这一张
+          winTileRole = 'middle'
+          winTileOnlyWait = true
+        } else if (index === 2 && ranks[0] === 1) {
+          // 12 等 3：边张，只等 3
+          winTileOnlyWait = true
+        } else if (index === 0 && ranks[2] === 9) {
+          // 89 等 7：边张，只等 7
+          winTileOnlyWait = true
         }
       }
       if (winTileRole === 'middle') break
@@ -619,7 +632,8 @@ function analyze(input: ScoreInput, rules: Rules): HandAnalysis {
     isFlush,
     isGrassOneColor,
     isBuDongShou,
-    winTileRole
+    winTileRole,
+    winTileOnlyWait
   }
 }
 
@@ -897,13 +911,13 @@ export function scoreHand(input: ScoreInput): ScoreResult {
 
   // —— 摸子 ——
   const moziItems: MoziItem[] = []
-  const isKuZhiYa = isYaDang && enabled('压当') && (input.visibleWinTileCount ?? 0) >= 3
+  const isKuZhiYa = a.winTileOnlyWait && (input.visibleWinTileCount ?? 0) >= 3
   if (isKuZhiYa && enabled('枯只压')) {
     const units = input.selfDraw ? rules.kuZhiYaMozi.selfDraw : rules.kuZhiYaMozi.deal
     moziItems.push({
       name: '枯只压',
       units,
-      detail: `压当中张且该牌外面已出 3 张，${input.selfDraw ? '自摸' : '接牌'} ${units} 个大摸子`
+      detail: `只等这一张且该牌外面已出 3 张，${input.selfDraw ? '自摸' : '接牌'} ${units} 个大摸子`
     })
   } else if (isYaDang && enabled('压当')) {
     moziItems.push({ name: '压当', units: 1, detail: '压当成牌，1 个大摸子' })

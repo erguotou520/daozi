@@ -187,6 +187,23 @@ console.log('='.repeat(72))
   check('外面只有 2 张 → 只算压当（1 个大摸子）', notKu.mozi.units, 1)
 }
 
+// 枯只压扩展：边张（12 等 3 / 89 等 7）也只等一张，外面出完同样算
+{
+  const base = ['1万', '2万', '3万', '4万', '5万', '6万', '1条', '2条', '3条', '9条', '9条']
+  // 89 等 7（边张），外面已出 3 张
+  const kuLow = scoreHand({ concealed: ['7筒', '8筒', '9筒', ...base], winTile: '7筒', visibleWinTileCount: 3 })
+  check('89 等 7 + 外面 3 张 → 枯只压', kuLow.mozi.items.some(i => i.name === '枯只压'), true)
+  // 12 等 3（边张），外面已出 3 张
+  const kuHigh = scoreHand({ concealed: ['1筒', '2筒', '3筒', ...base], winTile: '3筒', visibleWinTileCount: 3 })
+  check('12 等 3 + 外面 3 张 → 枯只压', kuHigh.mozi.items.some(i => i.name === '枯只压'), true)
+  // 23 等 1（两面），外面 1 出完也还有 4 能成，不算枯只压
+  const twoWay = scoreHand({ concealed: ['1筒', '2筒', '3筒', ...base], winTile: '1筒', visibleWinTileCount: 3 })
+  check('23 等 1（两面）→ 不算枯只压', twoWay.mozi.items.some(i => i.name === '枯只压'), false)
+  // 外面只有 2 张 → 只是普通接牌，不给枯只压
+  const kuFew = scoreHand({ concealed: ['7筒', '8筒', '9筒', ...base], winTile: '7筒', visibleWinTileCount: 2 })
+  check('边张但外面只有 2 张 → 不算枯只压', kuFew.mozi.items.some(i => i.name === '枯只压'), false)
+}
+
 // 杠后赛花：摸子翻倍
 {
   const concealed = [...suitTiles('筒'), '5条', '5条']
