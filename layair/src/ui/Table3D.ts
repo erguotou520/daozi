@@ -455,9 +455,12 @@ export class Table3D {
       const walls = visual[seat] ?? []
       for (let i = 0; i < STACKS; i += 1) {
         const layers = walls[i] ?? [false, false]
+        // 只剩上层时不能悬空：按现有层数从桌面向下压紧
+        let level = 0
         for (let layer = 0; layer < 2; layer += 1) {
           if (!layers[layer]) continue
-          const y = TILE_T / 2 + layer * (TILE_T + 1)
+          const y = TILE_T / 2 + level * (TILE_T + 1)
+          level += 1
           if (seat === 2 || seat === 0) {
             // 上下两条墙：沿 x 排，进深朝 z
             const x = -half + i * WALL_STEP + WALL_STEP / 2
@@ -648,7 +651,15 @@ export class Table3D {
   private hand: HandState | null = null
 
   /** 同步整桌：每次出牌/摸牌后重建 3D 节点 */
-  sync(hand: HandState | null, selfTiles: Tile[], dice: { a: number; b: number } | null, rolling: boolean) {
+  sync(
+    hand: HandState | null,
+    selfTiles: Tile[],
+    dice: { a: number; b: number } | null,
+    rolling: boolean,
+    wallVisual?: Array<Array<[boolean, boolean]>>,
+    dealtCounts?: number[],
+    dealing = false
+  ) {
     this.hand = hand
     this.selfHits = []
     this.lastMark = null
@@ -664,8 +675,8 @@ export class Table3D {
       return
     }
 
-    // 牌墙
-    const visual = [0, 1, 2, 3].map(seat => wallVisualOf(hand, seat))
+    // 牌墙：发牌阶段必须用已抓走的位置，不能直接用完整牌山
+    const visual = wallVisual ?? [0, 1, 2, 3].map(seat => wallVisualOf(hand, seat))
     this.addWall(visual)
 
     const winner = hand.winner?.seat
@@ -677,7 +688,9 @@ export class Table3D {
         const reveal = hand.phase === 'over' && winner === seat
         const tiles = reveal
           ? [...player.hand].sort(tileOrder)
-          : player.hand
+          : dealing
+            ? player.hand.slice(0, dealtCounts?.[seat] ?? 0)
+            : player.hand
         this.addSeatHand(seat, tiles, reveal)
       }
       this.addMelds(seat, player)

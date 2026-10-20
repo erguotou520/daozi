@@ -210,7 +210,7 @@ export class TableView {
   private sync3D() {
     if (!this.three) return
     const dice = this.phase === 'rolling' ? this.shownDice : this.dice ?? this.shownDice
-    this.three.sync(this.hand, this.myHandTiles(), dice, this.phase === 'rolling')
+    this.three.sync(this.hand, this.myHandTiles(), dice, this.phase === 'rolling', this.wallVisual(), this.dealtCounts, this.phase === 'dealing')
     this.threeView.graphics.clear()
     this.threeView.graphics.drawTexture(this.three.texture, 0, 0, this.viewW, this.viewH)
   }
@@ -2251,19 +2251,26 @@ export class TableView {
     }
 
     if (hand.phase === 'choose-shortage') {
-      const pending = hand.players.find(player => !player.shortage && (player.isAI || (AUTO && player.seat === 0)))
-      if (pending) {
-        const action = chooseAIAction(hand, pending.seat)
-        if (action) {
-          try {
-            this.hand = applyAction(hand, action)
-          } catch {
-            return
-          }
-          this.persist()
-          this.render()
-          this.schedule(240 * this.pace(), () => this.tick())
+      // 一次把三家 AI 的定缺都落下来，玩家选缺时就能看到所有人缺什么
+      let changed = false
+      let current = hand
+      while (current.phase === 'choose-shortage') {
+        const pending = current.players.find(player => !player.shortage && (player.isAI || (AUTO && player.seat === 0)))
+        if (!pending) break
+        const action = chooseAIAction(current, pending.seat)
+        if (!action) break
+        try {
+          current = applyAction(current, action)
+          changed = true
+        } catch {
+          break
         }
+      }
+      if (changed) {
+        this.hand = current
+        this.persist()
+        this.render()
+        this.schedule(240 * this.pace(), () => this.tick())
       }
       return
     }
