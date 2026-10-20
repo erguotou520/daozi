@@ -138,6 +138,16 @@ export class TableView {
   private spinTimer: ReturnType<typeof setInterval> | null = null
   private autoCloseScheduled = false
   private declinedWin = false
+  /** 3D 手牌的两段式出牌：第一下选中（牌抬起来），第二下才打出 */
+  private selectedIndex = -1
+  private selectedTile: Tile | null = null
+  /** 拖动视角的临时状态：拖动过就不再把 mouseup 当成点牌 */
+  private dragLast: { x: number; y: number } | null = null
+  private dragMoved = false
+  private suppressClick = false
+  private camHud: Laya.Text | null = null
+  /** 3D 手牌的点击区（content 局部坐标），用来判断拖动是不是从牌上开始的 */
+  private handHitRects: Array<{ x: number; y: number; w: number; h: number }> = []
   private history: HistoryState = createHistory()
   private showStats = false
   private showExit = false
@@ -187,6 +197,13 @@ export class TableView {
     Laya.timer.once(40, this, this.init3D)
 
     Laya.stage.on(Laya.Event.KEY_DOWN, this, this.onKeyDown)
+    // 3D 视角：拖动旋转，滚轮缩放
+    Laya.stage.on(Laya.Event.MOUSE_DOWN, this, this.onStageDown)
+    Laya.stage.on(Laya.Event.MOUSE_MOVE, this, this.onStageMove)
+    Laya.stage.on(Laya.Event.MOUSE_UP, this, this.onStageUp)
+    if ((Laya.Event as unknown as { MOUSE_WHEEL?: string }).MOUSE_WHEEL) {
+      Laya.stage.on((Laya.Event as unknown as { MOUSE_WHEEL: string }).MOUSE_WHEEL, this, this.onWheel)
+    }
     this.createDice()
     this.positionDice()
     if (this.phase === 'playing') this.schedule(600, () => this.tick())
@@ -210,9 +227,33 @@ export class TableView {
   private sync3D() {
     if (!this.three) return
     const dice = this.phase === 'rolling' ? this.shownDice : this.dice ?? this.shownDice
-    this.three.sync(this.hand, this.myHandTiles(), dice, this.phase === 'rolling', this.wallVisual(), this.dealtCounts, this.phase === 'dealing')
+    this.three.sync(
+      this.hand,
+      this.myHandTiles(),
+      dice,
+      this.phase === 'rolling',
+      this.wallVisual(),
+      this.dealtCounts,
+      this.phase === 'dealing',
+      { selectedIndex: this.selectedIndex, dimTiles: this.dimTiles() }
+    )
     this.threeView.graphics.clear()
     this.threeView.graphics.drawTexture(this.three.texture, 0, 0, this.viewW, this.viewH)
+  }
+
+  /** 当前轮到自己、但规则上不许打的牌：3D 里压成灰调，且不接点击 */
+  private dimTiles(): Set<Tile> {
+    const hand = this.hand
+    const result = new Set<Tile>()
+    if (!hand || !this.is3D()) return result
+    const myTurn = hand.phase === 'discard' && this.currentActor(hand) === 0
+    if (!myTurn) return result
+    const playable = new Set(playableDiscards(hand, 0))
+    const forbidden = new Set(forbiddenDiscardsFor(hand, 0))
+    for (const tile of this.myHandTiles()) {
+      if (!playable.has(tile) || forbidden.has(tile)) result.add(tile)
+    }
+    return result
   }
 
   private is3D(): boolean {
@@ -575,6 +616,7 @@ export class TableView {
       this.renderIdle()
       this.renderHistoryIcon()
       this.renderOverlays()
+      this.renderCameraHud()
       this.positionDice()
       return
     }
@@ -583,6 +625,7 @@ export class TableView {
     if (this.phase === 'round-over' && !this.hand) {
       this.renderRoundSummary()
       this.renderOverlays()
+      this.renderCameraHud()
       this.positionDice()
       return
     }
@@ -597,7 +640,101 @@ export class TableView {
     this.renderRoundSummary()
     this.renderHistoryIcon()
     this.renderOverlays()
+    this.renderCameraHud()
     this.positionDice()
+  }
+
+  /* ------------------------------------------------------------------ *
+   * 视角：拖动旋转 / 滚轮缩放，并把当前参数贴在左上角方便抄下来
+   * ------------------------------------------------------------------ */
+
+  private camHudText(): string {
+    if (!this.three) return ''
+    const info = this.three.cameraInfo()
+    return `视角 俯${info.pitch}° 方位${info.yaw}° · fov${info.fov} · 距${info.dist}\npos ${info.pos}\n拖动空白处旋转 · 滚轮缩放`
+  }
+
+  private renderCameraHud() {
+    this.camHud = null
+    if (!this.is3D()) return
+    const w = Math.round(Math.min(300, Math.max(196, this.viewW * 0.34)))
+    const fs = Math.max(10, Math.round(w * 0.042))
+    const h = fs * 4 + 10
+    const panel = makePanel(w, h, 6, 'rgba(6,26,20,0.66)', 'rgba(217,180,95,0.35)', 1)
+    panel.pos(8, 8)
+    panel.mouseEnabled = false
+    const text = makeText(this.camHudText(), {
+      size: fs,
+      color: 'rgba(226,236,228,0.94)',
+      width: w - 12,
+      height: h - 6,
+      x: 6,
+      y: 4
+    })
+    text.mouseEnabled = false
+    panel.addChild(text)
+    this.camHud = text
+    this.overlay.addChild(panel)
+
+    // 复位按钮：拖乱了可以一键回到默认视角
+    const reset = makeButton({
+      width: 46,
+      height: fs + 10,
+      label: '复位视角',
+      fontSize: fs,
+      face: 'chip',
+      onClick: () => {
+        this.three?.resetCamera()
+        this.updateCamHud()
+        this.render()
+      }
+    })
+    reset.pos(8, 8 + h + 4)
+    reset.mouseEnabled = true
+    this.overlay.addChild(reset)
+  }
+
+  private updateCamHud() {
+    if (this.camHud) this.camHud.text = this.camHudText()
+  }
+
+  private onStageDown(event: Laya.Event) {
+    if (!this.is3D()) return
+    this.suppressClick = false
+    this.dragMoved = false
+    // 从自己的手牌上起手时不去转视角，避免点牌被拖动吃掉
+    const p = this.content.globalToLocal(new Laya.Point(event.stageX, event.stageY))
+    const onTile = this.handHitRects.some(
+      r => p.x >= r.x && p.x <= r.x + r.w && p.y >= r.y && p.y <= r.y + r.h
+    )
+    this.dragLast = onTile ? null : { x: event.stageX, y: event.stageY }
+  }
+
+  private onStageMove(event: Laya.Event) {
+    if (!this.dragLast || !this.is3D()) return
+    const dx = event.stageX - this.dragLast.x
+    const dy = event.stageY - this.dragLast.y
+    if (!this.dragMoved && Math.abs(dx) + Math.abs(dy) < 5) return
+    this.dragMoved = true
+    this.dragLast = { x: event.stageX, y: event.stageY }
+    this.three?.orbit(dx, dy)
+    this.updateCamHud()
+  }
+
+  private onStageUp() {
+    if (!this.dragLast) return
+    this.dragLast = null
+    if (!this.dragMoved) return
+    // 拖动过就别把这次松手当成点牌
+    this.suppressClick = true
+    this.render()
+  }
+
+  private onWheel(event: Laya.Event) {
+    if (!this.is3D()) return
+    const delta = (event as unknown as { delta?: number }).delta ?? 0
+    this.three?.zoom(delta > 0 ? 1.06 : 0.94)
+    this.updateCamHud()
   }
 
   /** 当前牌墙可视状态：对局中以引擎为准，发牌阶段按已抓走的位置实时减少 */
@@ -1466,41 +1603,58 @@ export class TableView {
 
   }
 
-  /** 3D 手牌只保留投影后的点击层 + 可打/禁打描边 */
+  /**
+   * 3D 手牌：只铺一层透明的点击区，位置严格按牌的投影走，不画任何 2D 描边。
+   * 交互改成两段式——第一下选中（3D 里那张牌抬起来），第二下才打出。
+   */
   private renderHand3D() {
     const hand = this.hand
+    this.handHitRects = []
     if (!hand || !this.three) return
     const tiles = this.myHandTiles()
     if (!tiles.length) return
     const myTurn = hand.phase === 'discard' && this.currentActor(hand) === 0
+    // 轮次变了 / 选中的牌已经不在了 → 清掉选中态
+    if (!myTurn || (this.selectedIndex >= 0 && tiles[this.selectedIndex] !== this.selectedTile)) {
+      this.selectedIndex = -1
+      this.selectedTile = null
+    }
     const playable = new Set(playableDiscards(hand, 0))
     const forbidden = new Set(forbiddenDiscardsFor(hand, 0))
-    const mustShortage = shortageTiles(hand.players[0]).length > 0
     const winPending =
       myTurn && !this.declinedWin && legalActions(hand, 0).some(action => action.type === 'win')
 
     for (const hit of this.three.selfHits) {
       if (!hit || hit.w <= 0 || hit.h <= 0) continue
-      const canPlay = myTurn && playable.has(hit.tile) && !winPending
-      const isMustPlay = canPlay && mustShortage
-      const isForbidden = myTurn && forbidden.has(hit.tile)
-      const x = Math.round(hit.x - this.m.boardX)
-      const y = Math.round(hit.y - this.m.boardY)
+      // 禁打（不属于缺门 / 大吊车禁张）与成牌待决时一律不接点击
+      const canPlay = myTurn && playable.has(hit.tile) && !forbidden.has(hit.tile) && !winPending
+      if (!canPlay) continue
       const view = new Laya.Sprite()
       view.size(Math.max(1, Math.round(hit.w)), Math.max(1, Math.round(hit.h)))
-      view.pos(x, y)
-      if (isMustPlay) {
-        view.graphics.drawRoundRect(0, 0, view.width, view.height, this.u(4), this.u(4), this.u(4), this.u(4), null as any, COLORS.brass, 2)
-      } else if (isForbidden) {
-        view.graphics.drawRoundRect(0, 0, view.width, view.height, this.u(4), this.u(4), this.u(4), this.u(4), null as any, 'rgba(200,69,47,0.9)', 2)
-      }
-      if (canPlay) {
-        view.hitArea = new Laya.Rectangle(0, 0, view.width, view.height)
-        view.mouseEnabled = true
-        view.on(Laya.Event.CLICK, null, () => this.act({ type: 'discard', seat: 0, tile: hit.tile }))
-      }
+      view.pos(Math.round(hit.x - this.m.boardX), Math.round(hit.y - this.m.boardY))
+      view.hitArea = new Laya.Rectangle(0, 0, view.width, view.height)
+      view.mouseEnabled = true
+      view.on(Laya.Event.CLICK, null, () => this.onHandTileClick(hit.index, hit.tile))
+      this.handHitRects.push({ x: view.x, y: view.y, w: view.width, h: view.height })
       this.content.addChild(view)
     }
+  }
+
+  /** 第一下选中并抬起，第二下打出 */
+  private onHandTileClick(index: number, tile: Tile) {
+    if (this.suppressClick) {
+      this.suppressClick = false
+      return
+    }
+    if (this.selectedIndex === index && this.selectedTile === tile) {
+      this.selectedIndex = -1
+      this.selectedTile = null
+      this.act({ type: 'discard', seat: 0, tile })
+      return
+    }
+    this.selectedIndex = index
+    this.selectedTile = tile
+    this.render()
   }
 
   /** 把原本在中央面板的 成/杠/碰/过 收到操作条，避免挡牌河 */
@@ -2277,6 +2431,8 @@ export class TableView {
     const hand = this.hand
     if (!hand) return
     if (action.type !== 'discard') this.declinedWin = false
+    this.selectedIndex = -1
+    this.selectedTile = null
     try {
       this.hand = applyAction(hand, action)
     } catch (error) {

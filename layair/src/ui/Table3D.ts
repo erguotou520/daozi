@@ -44,15 +44,24 @@ const HAND_X_SIDE = TABLE_W / 2 - HAND_EDGE_GAP - TILE_T / 2
  * 不再单独做一套「又细又小」的牌墙（那套比手牌小一半，看着不像牌）。
  */
 const STACKS = 17
-/** 牌墙也按牌宽紧挨着排；整圈长度由 17 墩决定 */
-const WALL_STEP = TILE_W
+/**
+ * 牌墙每墩之间留 2 的缝：原来墩距正好等于牌宽，两张牌侧面完全共面，
+ * 深度缓冲分不出前后，渲染出来就是一条条闪的「穿透」竖纹。
+ */
+const WALL_STEP = TILE_W + 2
 const WALL_LEN = TILE_W
 const WALL_SPAN = STACKS * WALL_STEP
 /** 牌墙 / 副露 / 牌河的摆放线（离桌心的距离），由外向内依次是 手牌 → 牌墙 → 副露 → 牌河 */
-const WALL_Z = 494
-const WALL_X = 494
-const WALL_Z_SELF = 494
+const WALL_Z = 520
+const WALL_X = 520
+const WALL_Z_SELF = 520
 const DISCARD_R0 = 416
+
+/** 默认视角：俯角 32°（看得清对家牌河）、距离 1420、fov 46 */
+const DEFAULT_CAM_PITCH = 32
+const DEFAULT_CAM_YAW = 0
+const DEFAULT_CAM_DIST = 1310
+const DEFAULT_CAM_FOV = 44
 
 function hexColor(hex: string, alpha = 1): Laya.Color {
   const value = hex.replace('#', '')
@@ -106,6 +115,17 @@ export class Table3D {
   private worldW: number
   private worldH: number
 
+  /**
+   * 相机参数用「绕注视点转」的球坐标存，方便拖动：
+   * yaw 绕 Y 转、pitch 是俯角、dist 是到注视点的距离。
+   * 默认俯角 32°（原来 28°，压得太平看不清对家的牌河），距离也收近一档。
+   */
+  private camTarget = new Laya.Vector3(0, 0, 0)
+  private camYaw = DEFAULT_CAM_YAW
+  private camPitch = DEFAULT_CAM_PITCH
+  private camDist = DEFAULT_CAM_DIST
+  private camFov = DEFAULT_CAM_FOV
+
   constructor(viewW: number, viewH: number) {
     this.viewW = viewW
     this.viewH = viewH
@@ -121,9 +141,7 @@ export class Table3D {
     this.camera.nearPlane = 1
     // 固定相机稍收窄，保证自己的手牌清楚，同时整桌和四家牌河都在画面内。
     this.camera.farPlane = 16000
-    this.camera.fieldOfView = 42
-    this.camera.transform.position = new Laya.Vector3(0, 520, 1450)
-    this.camera.transform.rotationEuler = new Laya.Vector3(-28, 0, 0)
+    this.applyCamera()
 
     this.tableRoot = new Laya.Sprite3D()
     this.dynamicRoot = new Laya.Sprite3D()
@@ -131,7 +149,7 @@ export class Table3D {
     scene.addChild(this.dynamicRoot)
 
     const ratio = viewH / Math.max(1, viewW)
-    this.texW = Math.min(1440, Math.max(960, Math.round(viewW * 0.9)))
+    this.texW = Math.min(1440, Math.max(1100, Math.round(viewW * 1.5)))
     this.texH = Math.max(420, Math.round(this.texW * ratio))
     this.worldW = this.texW
     this.worldH = this.texH
@@ -170,6 +188,59 @@ export class Table3D {
     this.addBox(70, 16, TABLE_D + 100, COLORS.woodDark, TABLE_W / 2 + 28, -4, 0, this.tableRoot)
     this.addBox(TABLE_W + 120, 10, 32, COLORS.brassDim, 0, -2, -TABLE_D / 2 - 62, this.tableRoot)
     this.addBox(TABLE_W + 120, 10, 32, COLORS.brassDim, 0, -2, TABLE_D / 2 + 62, this.tableRoot)
+  }
+
+  /** 把 yaw / pitch / dist 换算成相机位置和朝向 */
+  private applyCamera() {
+    const pitch = (this.camPitch * Math.PI) / 180
+    const yaw = (this.camYaw * Math.PI) / 180
+    const horizontal = Math.cos(pitch) * this.camDist
+    this.camera.fieldOfView = this.camFov
+    this.camera.transform.position = new Laya.Vector3(
+      this.camTarget.x + Math.sin(yaw) * horizontal,
+      this.camTarget.y + Math.sin(pitch) * this.camDist,
+      this.camTarget.z + Math.cos(yaw) * horizontal
+    )
+    this.camera.transform.rotationEuler = new Laya.Vector3(-this.camPitch, this.camYaw, 0)
+  }
+
+  /** 拖动旋转：dx 横向绕桌转，dy 上下压仰角 */
+  orbit(dx: number, dy: number) {
+    this.camYaw = ((this.camYaw + dx * 0.22) % 360 + 360) % 360
+    this.camPitch = Math.max(14, Math.min(78, this.camPitch + dy * 0.16))
+    this.applyCamera()
+  }
+
+  /** 回到默认视角 */
+  resetCamera() {
+    this.camYaw = DEFAULT_CAM_YAW
+    this.camPitch = DEFAULT_CAM_PITCH
+    this.camDist = DEFAULT_CAM_DIST
+    this.camFov = DEFAULT_CAM_FOV
+    this.applyCamera()
+  }
+
+  /** 滚轮 / 双指缩放：factor > 1 拉远 */
+  zoom(factor: number) {
+    this.camDist = Math.max(700, Math.min(2600, this.camDist * factor))
+    this.applyCamera()
+  }
+
+  /** 当前视角参数，供 HUD 显示、也方便把这组数值抄下来固定 */
+  cameraInfo(): { pos: string; pitch: number; yaw: number; fov: number; dist: number } {
+    const p = this.camera.transform.position
+    return {
+      pos: `(${Math.round(p.x)}, ${Math.round(p.y)}, ${Math.round(p.z)})`,
+      pitch: Math.round(this.camPitch),
+      yaw: Math.round(this.camYaw),
+      fov: this.camFov,
+      dist: Math.round(this.camDist)
+    }
+  }
+
+  /** 视角变化后手牌点击区要重新投影 */
+  refreshCamera() {
+    this.applyCamera()
   }
 
   /** 圆角长方体网格：六个面都做圆角，牌摸起来不是刀切豆腐 */
@@ -306,9 +377,9 @@ export class Table3D {
     return mat
   }
 
-  /** 牌面贴图：站立牌和平躺牌共用同一张（同一张牌只有一种牌面） */
-  private faceTexture(tile: Tile): Laya.Texture2D {
-    const key = tile
+  /** 牌面贴图：站立牌和平躺牌共用同一张（同一张牌只有一种牌面）；dim 是禁打的灰版 */
+  private faceTexture(tile: Tile, dim = false): Laya.Texture2D {
+    const key = dim ? `${tile}#dim` : tile
     const cached = this.faceCache.get(key)
     if (cached) return cached
 
@@ -320,19 +391,20 @@ export class Table3D {
     ctx.clearRect(0, 0, w, h)
     // 牌面就是一张干净的白纸：绿背已经由牌体那 30% 的绿长方体提供了，
     // 贴图里再画一条绿顶带，从相机俯视时会叠出「两种绿」。
-    ctx.fillStyle = '#F2E7CE'
+    ctx.fillStyle = dim ? '#B4B9B3' : '#F2E7CE'
     ctx.fillRect(0, 0, w, h)
-    ctx.fillStyle = '#F7EEDA'
+    ctx.fillStyle = dim ? '#C3C7C1' : '#F7EEDA'
     ctx.fillRect(3, 3, w - 6, h - 6)
 
     // 不再画黑框：牌与牌之间靠 3D 间隙和圆角分隔
-    ctx.strokeStyle = 'rgba(143,120,82,0.32)'
+    ctx.strokeStyle = dim ? 'rgba(110,116,110,0.45)' : 'rgba(143,120,82,0.32)'
     ctx.lineWidth = 1.5
     ctx.strokeRect(5.5, 5.5, w - 11, h - 11)
 
     const honor = tile.length === 1 && HONOR_COLOR[tile] !== undefined
     const suit = honor ? '字' : tile.charAt(1)
-    const color = honor ? HONOR_COLOR[tile] : SUIT_COLOR[suit] ?? COLORS.ink
+    // dim（禁打）时整张压成灰调，一眼看出「这张点不动」
+    const color = dim ? '#7C837D' : honor ? HONOR_COLOR[tile] : SUIT_COLOR[suit] ?? COLORS.ink
     const areaTop = 10
     const areaH = h - areaTop - 10
     ctx.textAlign = 'center'
@@ -378,7 +450,8 @@ export class Table3D {
     parent: Laya.Sprite3D,
     mode: 'stand' | 'flatUp' | 'flatDown',
     rotY = 0,
-    highlight = false
+    highlight = false,
+    dim = false
   ): Laya.Sprite3D {
     // 外层节点只负责水平转向（左右两条牌墙要转 90°），内层负责翻倒。
     // 分成两个节点做，旋转顺序才是确定的：先翻倒，再水平转，不会受欧拉角顺序影响。
@@ -395,14 +468,24 @@ export class Table3D {
     const greenT = TILE_T * 0.3
     const whiteT = TILE_T - greenT
     // 绿背：厚度靠后那 30%
-    this.addRounded(TILE_W, TILE_H, greenT, 2.2, this.bodyMaterial(TILE_BACK), 0, 0, -TILE_T / 2 + greenT / 2, body)
+    this.addRounded(
+      TILE_W,
+      TILE_H,
+      greenT,
+      2.2,
+      this.bodyMaterial(dim ? '#3C6B5A' : TILE_BACK),
+      0,
+      0,
+      -TILE_T / 2 + greenT / 2,
+      body
+    )
     // 白身：其余 70%，往绿背方向多咬 0.5 防接缝漏光
     this.addRounded(
       TILE_W,
       TILE_H,
       whiteT + 0.5,
       2.2,
-      this.bodyMaterial(COLORS.ivory),
+      this.bodyMaterial(dim ? '#9AA29B' : COLORS.ivory),
       0,
       0,
       TILE_T / 2 - whiteT / 2 - 0.25,
@@ -416,7 +499,7 @@ export class Table3D {
       TILE_H - 1.5,
       1.6,
       0.8,
-      this.faceMaterial(this.faceTexture(tile)),
+      this.faceMaterial(this.faceTexture(tile, dim)),
       0,
       0,
       TILE_T / 2 + 0.8,
@@ -463,9 +546,10 @@ export class Table3D {
     z: number,
     faceUp: boolean,
     parent: Laya.Sprite3D,
-    rotationY = 0
+    rotationY = 0,
+    dim = false
   ) {
-    this.addTileBody(faceUp ? tile : null, x, y, z, parent, 'stand', rotationY)
+    this.addTileBody(faceUp ? tile : null, x, y, z, parent, 'stand', rotationY, false, dim)
   }
 
   /** 平躺的牌：弃牌、副露。牌面朝上 */
@@ -510,7 +594,9 @@ export class Table3D {
     seat: number,
     tiles: Tile[],
     faceUp: boolean,
-    drawnIndex = -1
+    drawnIndex = -1,
+    selectedIndex = -1,
+    dimTiles?: Set<Tile>
   ) {
     if (!tiles.length) return
     // 牌与牌留 2 的缝：不留缝时一排牌会糊成一条，看不出几张
@@ -521,8 +607,12 @@ export class Table3D {
       if (seat === 0) {
         // 刚摸到的牌只往右让一点，底部仍和手牌齐平（原先整只抬高 8，看着像往后缩）
         const x = startX + i * step + (i === drawnIndex ? 7 : 0)
-        this.addStandingTile(tile, x, TILE_H / 2 + 2, HAND_Z_SELF, faceUp, this.dynamicRoot, 0)
-        this.recordSelfHit(tile, i, x, TILE_H / 2 + 2, HAND_Z_SELF, i === drawnIndex)
+        // 选中（第一下点击）：整张牌抬起来、往身前拉一点，明确「就是这张」
+        const picked = i === selectedIndex
+        const y = TILE_H / 2 + 2 + (picked ? 18 : 0)
+        const z = HAND_Z_SELF + (picked ? 10 : 0)
+        this.addStandingTile(tile, x, y, z, faceUp, this.dynamicRoot, 0, !!dimTiles?.has(tile))
+        this.recordSelfHit(tile, i, x, y, z, i === drawnIndex)
       } else if (seat === 2) {
         const x = startX + i * step
         this.addStandingTile(tile, x, TILE_H / 2 + 2, HAND_Z_OPP, faceUp, this.dynamicRoot, faceUp ? 0 : 180)
@@ -662,10 +752,43 @@ export class Table3D {
     })
   }
 
+  /**
+   * 世界坐标 → 3D 视图内的屏幕像素坐标。
+   * 原来用 camera.worldToViewportPoint，但它返回的坐标跟 RenderTexture 的视口对不上，
+   * 手牌点击区被算到了屏幕上方的空白处（点牌没反应）。这里直接用相机的
+   * 位置 / 朝向 / fov 自己算，和 applyCamera 用的是同一组参数，必然一致。
+   */
   private project(x: number, y: number, z: number): [number, number] {
-    const v = new Laya.Vector4()
-    this.camera.worldToViewportPoint(new Laya.Vector3(x, y, z), v)
-    return [(v.x / this.texW) * this.viewW, (v.y / this.texH) * this.viewH]
+    const pitch = (this.camPitch * Math.PI) / 180
+    const yaw = (this.camYaw * Math.PI) / 180
+    const sinP = Math.sin(pitch)
+    const cosP = Math.cos(pitch)
+    const sinY = Math.sin(yaw)
+    const cosY = Math.cos(yaw)
+    // 相机基向量（与 applyCamera 的 (sinYaw·h, sinPitch·dist, cosYaw·h) 位置一致）
+    const fx = -sinY * cosP
+    const fy = -sinP
+    const fz = -cosY * cosP
+    const rx = cosY
+    const rz = -sinY
+    // up = right × forward
+    const ux = -rz * fy
+    const uy = rz * fx - rx * fz
+    const uz = rx * fy
+
+    const pos = this.camera.transform.position
+    const dx = x - pos.x
+    const dy = y - pos.y
+    const dz = z - pos.z
+    const depth = dx * fx + dy * fy + dz * fz
+    if (depth <= 0.001) return [-10000, -10000]
+    const sx = dx * rx + dz * rz
+    const sy = dx * ux + dy * uy + dz * uz
+    const tanY = Math.tan(((this.camFov * Math.PI) / 180) / 2)
+    const aspect = this.viewW / Math.max(1, this.viewH)
+    const ndcX = sx / (depth * tanY * aspect)
+    const ndcY = sy / (depth * tanY)
+    return [(ndcX * 0.5 + 0.5) * this.viewW, (0.5 - ndcY * 0.5) * this.viewH]
   }
 
   private projectGroup(node: Laya.Sprite3D, w: number, h: number, d: number): LastMark {
@@ -695,7 +818,8 @@ export class Table3D {
     rolling: boolean,
     wallVisual?: Array<Array<[boolean, boolean]>>,
     dealtCounts?: number[],
-    dealing = false
+    dealing = false,
+    selfView?: { selectedIndex?: number; dimTiles?: Set<Tile> }
   ) {
     this.hand = hand
     this.selfHits = []
@@ -720,7 +844,7 @@ export class Table3D {
     for (let seat = 0; seat < 4; seat += 1) {
       const player = hand.players[seat]
       if (seat === 0) {
-        this.addSeatHand(0, selfTiles, true, selfTiles.length - 1)
+        this.addSeatHand(0, selfTiles, true, selfTiles.length - 1, selfView?.selectedIndex ?? -1, selfView?.dimTiles)
       } else {
         const reveal = hand.phase === 'over' && winner === seat
         const tiles = reveal

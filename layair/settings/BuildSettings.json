@@ -1,6 +1,19 @@
 {
   "name": "daozi",
-  "startupScene": "res://9b931ecf-fde9-44dd-acf3-15f8dc807965",
   "displayName": "倒子",
-  "version": "1.0.0"
+  "version": "1.0.0",
+  "startupScene": "res://9b931ecf-fde9-44dd-acf3-15f8dc807965",
+  "android": {
+    "targetArchitectures": {
+      "ARMv7": false,
+      "ARM64": true,
+      "x86": false,
+      "x86-64": false
+    },
+    "exportFormat": "APK"
+  },
+  "wxgame": {
+    "appid": "wx35973ee7b1494ae8",
+    "enableHighPerformanceMode": true
+  }
 }
