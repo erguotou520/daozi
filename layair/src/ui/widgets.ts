@@ -140,6 +140,8 @@ export interface TileOpts {
   marked?: boolean
   /** 摊在桌面上（牌河 / 副露 / 打出的牌）；默认是立着的牌 */
   flat?: boolean
+  /** 顶部厚度条放到牌的下沿：左右两家转 90° 后，白条正好朝外侧 */
+  stripAtBottom?: boolean
 }
 
 /**
@@ -161,9 +163,9 @@ export class TileView extends Laya.Sprite {
     if (opts.flat) {
       this.drawFlat(tile, w, h, !!opts.back)
     } else if (opts.back) {
-      this.drawStandingBack(w, h)
+      this.drawStandingBack(w, h, !!opts.stripAtBottom)
     } else {
-      this.drawStandingFace(tile, w, h)
+      this.drawStandingFace(tile, w, h, !!opts.stripAtBottom)
     }
 
     if (opts.marked) {
@@ -182,88 +184,45 @@ export class TileView extends Laya.Sprite {
    * 顶面是一条向后收窄的梯形，正面在下方，右侧留一条侧面；
    * 所有面之间压黑线，牌与牌之间再留一条外部黑缝。
    */
-  private drawStandingFace(tile: string, w: number, h: number) {
+  /**
+   * 立着的牌（手牌 / 亮牌）。
+   * 顶部一条"厚度"带：绿 30% + 白 70%；下面是整块象牙白牌面。
+   * 全部是正长方形——不做梯形、不留侧边厚度、不套内框。
+   */
+  /**
+   * 立着的牌（手牌 / 亮牌）。
+   * 一条「厚度」带：绿 30% + 白 70%；其余是整块象牙白牌面。
+   * 全部是正长方形——不做梯形、不留侧边厚度、不套内框。
+   */
+  private drawStandingFace(tile: string, w: number, h: number, stripAtBottom = false) {
     const g = this.graphics
-    const depth = Math.max(4, Math.round(h * 0.22))
-    const bevel = Math.max(2, Math.round(depth * 0.22))
-    const faceTop = depth + bevel
-    const faceH = h - faceTop
-    const inset = Math.max(2, Math.round(w * 0.055))
-    const side = Math.max(1, Math.round(w * 0.045))
-    const faceW = w - side
-    const r = Math.max(3, Math.round(w * 0.075))
-    const black = '#06100C'
-
-    const top = [inset, 0, w - inset, 0, w, depth, 0, depth]
-    // 落在桌面上的影子
-    g.drawPoly(0, 0, [inset + 2, 3, w - inset + 2, 3, w + 2, depth + 3, 2, depth + 3], 'rgba(2,10,7,0.38)')
-    g.drawRoundRect(3, faceTop + 3, faceW, faceH, r, r, r, r, 'rgba(2,10,7,0.30)')
-    // 整张牌的黑轮廓
-    g.drawPoly(0, 0, top, '#07110D')
-    g.drawRoundRect(0, faceTop - 1, faceW + 1, faceH + 1, r, r, r, r, '#07110D')
-
-    // 牌顶：本家看到的是青绿牌背顶面
-    g.drawPoly(0, 0, top, '#2F7A5E', black, 1.6)
-    g.drawPoly(0, 0, [inset + 3, 2, w - inset - 3, 2, w - 3, depth - 2, 3, depth - 2], 'rgba(255,255,255,0.16)')
-    g.drawPoly(0, 0, [inset + 1, 1, w - inset - 1, 1, w - 1, depth - 1, 1, depth - 1], null as any, 'rgba(190,235,210,0.35)', 1)
-
-    // 顶面与正面之间：本家先绿、再白、最后牌面
-    g.drawRect(0, depth, w, bevel, '#F4ECDC')
-    g.drawRect(0, depth, w, Math.max(1, Math.round(bevel * 0.45)), 'rgba(255,255,255,0.9)')
-    g.drawRect(0, depth + bevel - 1, w, 1, black)
-
-    // 正面
-    g.drawRoundRect(0, faceTop, faceW, faceH, r, r, r, r, '#F2E7CE', black, 1.6)
-    g.drawRect(2, faceTop + 2, faceW - 4, Math.max(1, faceH * 0.42), '#FBF4E2')
-    g.drawRect(2, faceTop + 2 + faceH * 0.42, faceW - 4, Math.max(1, faceH * 0.34), '#F7EEDA')
-    g.drawRect(2, faceTop + 2 + faceH * 0.76, faceW - 4, Math.max(1, faceH * 0.18), '#E7D8B8')
-    g.drawRect(2, faceTop + 2, faceW - 4, Math.max(1, faceH * 0.035), 'rgba(255,255,255,0.95)')
-    g.drawRect(1, faceTop + 1, 1, faceH - 2, 'rgba(255,255,255,0.55)')
-    g.drawRoundRect(1.5, faceTop + 1.5, faceW - 3, faceH - 3, Math.max(2, r - 1), Math.max(2, r - 1), Math.max(2, r - 1), Math.max(2, r - 1), null as any, 'rgba(143,120,82,0.5)', 1)
-
-    // 右侧厚度
-    g.drawRect(w - side, faceTop, side, faceH, '#D6C4A0')
-    g.drawRect(w - side, faceTop, 1, faceH, 'rgba(255,255,255,0.38)')
-    g.drawRect(w - 1, faceTop, 1, faceH, black)
-
-    this.drawTileText(tile, faceW, faceTop, faceH)
+    const depth = Math.max(5, Math.round(h * 0.2))
+    const greenH = Math.max(2, Math.round(depth * 0.3))
+    const whiteH = depth - greenH
+    const stripY = stripAtBottom ? h - depth : 0
+    const faceY = stripAtBottom ? 0 : depth
+    const faceH = h - depth
+    g.drawRect(0, stripY, w, greenH, '#2F7A5E')
+    g.drawRect(0, stripY + greenH, w, whiteH, '#FDF9EF')
+    g.drawRect(0, faceY, w, faceH, '#F2E7CE')
+    // 牌与牌紧挨着：只留一条极淡的右边缘线分开，不做整圈边框
+    g.drawRect(w - 1, 0, 1, h, 'rgba(120,100,70,0.2)')
+    this.drawTileText(tile, w, faceY, faceH)
   }
 
-  private drawStandingBack(w: number, h: number) {
+  /** 扣着的牌（对家牌背）：同一个长方形，顶部同样是绿 30% + 白 70%，牌身整块绿 */
+  /** 扣着的牌（对家牌背）：同一个长方形，顶部同样是绿 30% + 白 70%，牌身整块绿 */
+  private drawStandingBack(w: number, h: number, stripAtBottom = false) {
     const g = this.graphics
-    const depth = Math.max(4, Math.round(h * 0.16))
-    const bevel = Math.max(2, Math.round(depth * 0.22))
-    const faceTop = depth + bevel
-    const faceH = h - faceTop
-    const inset = Math.max(2, Math.round(w * 0.055))
-    const side = Math.max(1, Math.round(w * 0.045))
-    const faceW = w - side
-    const r = Math.max(3, Math.round(w * 0.075))
-    const black = '#06100C'
-    const top = [inset, 0, w - inset, 0, w, depth, 0, depth]
-    g.drawPoly(0, 0, [inset + 2, 3, w - inset + 2, 3, w + 2, depth + 3, 2, depth + 3], 'rgba(2,10,7,0.38)')
-    g.drawRoundRect(3, faceTop + 3, faceW, faceH, r, r, r, r, 'rgba(2,10,7,0.30)')
-    g.drawPoly(0, 0, top, '#07110D')
-    g.drawRoundRect(0, faceTop - 1, faceW + 1, faceH + 1, r, r, r, r, '#07110D')
-
-    // 对家视角：白色/象牙顶面 + 青绿侧沿 + 绿色牌背
-    g.drawPoly(0, 0, top, '#E9F1E2', black, 1.6)
-    g.drawPoly(0, 0, [inset + 3, 2, w - inset - 3, 2, w - 3, depth - 2, 3, depth - 2], 'rgba(255,255,255,0.55)')
-    g.drawRect(0, depth, w, bevel, '#2F7A5E')
-    g.drawRect(0, depth, w, Math.max(1, Math.round(bevel * 0.42)), 'rgba(188,232,206,0.55)')
-    g.drawRect(0, depth + bevel - 1, w, 1, black)
-
-    // 绿色牌背
-    g.drawRoundRect(0, faceTop, faceW, faceH, r, r, r, r, '#2C7459', black, 1.6)
-    g.drawRect(2, faceTop + 2, faceW - 4, Math.max(1, faceH * 0.44), '#3C9374')
-    g.drawRect(2, faceTop + 2, faceW - 4, Math.max(1, faceH * 0.045), 'rgba(255,255,255,0.32)')
-    g.drawRoundRect(1.5, faceTop + 1.5, faceW - 3, faceH - 3, Math.max(2, r - 1), Math.max(2, r - 1), Math.max(2, r - 1), Math.max(2, r - 1), null as any, 'rgba(185,235,210,0.24)', 1)
-    g.drawRect(faceW * 0.42, faceTop + faceH * 0.16, Math.max(1, faceW * 0.16), faceH * 0.68, 'rgba(255,255,255,0.05)')
-
-    // 右侧厚度
-    g.drawRect(w - side, faceTop, side, faceH, '#1E543E')
-    g.drawRect(w - side, faceTop, 1, faceH, 'rgba(255,255,255,0.18)')
-    g.drawRect(w - 1, faceTop, 1, faceH, black)
+    const depth = Math.max(5, Math.round(h * 0.2))
+    const greenH = Math.max(2, Math.round(depth * 0.3))
+    const whiteH = depth - greenH
+    const stripY = stripAtBottom ? h - depth : 0
+    const bodyY = stripAtBottom ? 0 : depth
+    g.drawRect(0, stripY, w, greenH, '#2F7A5E')
+    g.drawRect(0, stripY + greenH, w, whiteH, '#FDF9EF')
+    g.drawRect(0, bodyY, w, h - depth, '#2C7459')
+    g.drawRect(w - 1, 0, 1, h, 'rgba(10,40,30,0.26)')
   }
 
   /**
@@ -422,9 +381,10 @@ export class DiceView extends Laya.Sprite {
     const s = this.diceSize
     const g = this.graphics
     g.clear()
-    const r = s * 0.2
-    g.drawRoundRect(0, s * 0.06, s, s, r, r, r, r, '#8E7A4F')
-    g.drawRoundRect(0, 0, s, s * 0.94, r, r, r, r, '#F5EAD0', '#B8A483', 1)
+    const r = s * 0.22
+    // 影子必须和骰身同尺寸，只是往下错开一点；否则影子比骰身高，底下会露出直角边
+    g.drawRoundRect(0, s * 0.07, s, s * 0.93, r, r, r, r, '#8E7A4F')
+    g.drawRoundRect(0, 0, s, s * 0.93, r, r, r, r, '#F5EAD0', '#B8A483', 1)
     g.drawRect(2, 2, s - 4, Math.max(1, s * 0.06), 'rgba(255,255,255,0.8)')
 
     const pad = s * 0.17

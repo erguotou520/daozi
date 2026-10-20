@@ -122,7 +122,8 @@ export class TableView {
   private overlay: Laya.Sprite
   private threeView: Laya.Sprite
   private three: Table3D | null = null
-  private use3D = true
+  /** 默认走 2D 牌桌；地址栏加 ?3d=1 切回 3D */
+  private use3D = false
   private diceViews: DiceView[] = []
 
   private m: Metrics
@@ -172,7 +173,11 @@ export class TableView {
     this.threeView.mouseThrough = true
     this.root.addChildAt(this.threeView, 0)
 
-    if (HAS_WINDOW && ((window as any).location?.search ?? '').indexOf('2d=1') >= 0) this.use3D = false
+    // 运行模式：默认 2D；?3d=1 切 3D、?2d=1 显式指定 2D
+    // （IDE 内置预览没有地址栏，所以默认值必须是 2D）
+    const search = (HAS_WINDOW && ((window as any).location?.search ?? '')) || ''
+    if (/[?&]3d=1/.test(search)) this.use3D = true
+    if (/[?&]2d=1/.test(search)) this.use3D = false
 
     this.bgLayer = new Laya.Sprite()
     this.boardLayer = new Laya.Sprite()
@@ -266,9 +271,14 @@ export class TableView {
   }
 
   /** 横屏桌面的伪透视：顶部 80% 宽，底部 100% 宽 */
+  /**
+   * 透视系数：2D 版改成纯平面牌桌，这里恒为 1。
+   * （原来按 y 在 0.8~1.0 之间缩放，左右两面牌墙因此被排成斜的、
+   *  牌河每行大小也不一样，看着乱。留一个函数方便以后想加回来。）
+   */
   private persp(y: number): number {
-    const ratio = Math.min(1, Math.max(0, (y - this.m.ringY) / Math.max(1, this.m.ringH)))
-    return 0.8 + 0.2 * ratio
+    void y
+    return 1
   }
 
   /* ------------------------------------------------------------------ *
@@ -381,8 +391,9 @@ export class TableView {
     const laneRight = ringX + ringW - wallT - lanePad
 
     const sideLane = discardH * 2
-    const panelW = Math.max(220, Math.min(ringW - sideLane * 2 - u(20), u(270)))
-    const panelH = Math.max(170, Math.min(ringH * 0.82, u(150)))
+    // 中央只放「牌山 + 轮到谁」两行，面板收到最小
+    const panelW = Math.max(150, Math.min(ringW * 0.46, u(210)))
+    const panelH = Math.max(64, Math.min(ringH * 0.22, u(78)))
 
     return {
       landscape: true,
@@ -458,8 +469,8 @@ export class TableView {
     const laneRight = Math.round(ringX + ringW - wallT - 6)
 
     const sideLane = discardH
-    const panelW = Math.max(180, Math.round(laneRight - laneLeft - sideLane * 2 - 14))
-    const panelH = Math.round(Math.min(ringH * 0.9, 150 * scale))
+    const panelW = Math.max(140, Math.round(Math.min(ringW * 0.5, 220 * scale)))
+    const panelH = Math.max(60, Math.round(Math.min(ringH * 0.24, 84 * scale)))
 
     return {
       landscape: false,
@@ -585,17 +596,17 @@ export class TableView {
     }
     const m = this.m
     const rolling = this.phase === 'rolling'
-    const size = Math.round(this.u(rolling ? 58 : 24))
-    const gap = Math.round(size * 0.2)
-    const panelCX = m.boardW / 2
-    const panelCY = m.boardH / 2
+    // 骰子固定在桌面右上角：掷的时候大一点，落定后小一号
+    const size = Math.round(this.u(rolling ? 44 : 24))
+    const gap = Math.round(size * 0.18)
     const scale = size / 60
-    const panelTop = panelCY - m.panelH / 2
-    const y = rolling ? Math.round(panelCY - size - this.u(28)) : Math.round(panelTop + this.u(10))
+    const totalW = size * 2 + gap
+    const x0 = Math.round(m.boardW - this.u(10) - totalW)
+    const y = Math.round(this.u(6))
     for (let i = 0; i < this.diceViews.length; i += 1) {
       const view = this.diceViews[i]
       view.scale(scale, scale)
-      view.pos(Math.round(panelCX - size - gap / 2 + i * (size + gap)), y)
+      view.pos(x0 + i * (size + gap), y)
       view.setValue(i === 0 ? this.shownDice.a : this.shownDice.b)
     }
     this.diceLayer.pos(m.boardX, m.boardY)
@@ -633,6 +644,7 @@ export class TableView {
     this.renderWalls()
     this.renderDiscards()
     this.renderCenter()
+    this.renderTopHud()
     this.renderSeats()
     this.renderHand()
     this.renderSettlement()
@@ -856,7 +868,7 @@ export class TableView {
     const n = discards.length
     const laneW = m.laneRight - m.laneLeft
     const laneH = m.laneBottom - m.laneTop
-    const gap = Math.max(1, Math.round(m.discardW * 0.055))
+    const gap = 0
 
     if (seat === 0 || seat === 2) {
       const stepW = m.discardW + gap
@@ -932,6 +944,7 @@ export class TableView {
     return settleHand(hand)
   }
 
+  /** 中央提示：只留「牌山 / 发牌」和「轮到谁」两行，面板缩到最小 */
   private renderCenter() {
     if (this.is3D()) {
       this.renderCenter3D()
@@ -939,27 +952,22 @@ export class TableView {
     }
     const m = this.m
     const hand = this.hand
-
     const px = Math.round(m.boardW / 2 - m.panelW / 2)
     const py = Math.round(m.boardH / 2 - m.panelH / 2)
-    const panel = makePanel(m.panelW, m.panelH, this.u(12), 'rgba(7,28,23,0.68)', 'rgba(217,180,95,0.26)')
-    panel.pos(px, py)
-    this.content.addChild(panel)
-
-    const cx = m.boardW / 2
-    const textW = m.panelW - this.u(16)
-    const tx = px + this.u(8)
 
     if (this.phase === 'rolling') {
+      const panel = makePanel(m.panelW, m.panelH, this.u(10), 'rgba(7,28,23,0.62)', 'rgba(217,180,95,0.22)')
+      panel.pos(px, py)
+      this.content.addChild(panel)
       this.content.addChild(
         makeText('掷骰…', {
-          size: this.u(14),
+          size: this.u(13),
           color: COLORS.mist,
           align: 'center',
           width: m.panelW,
-          height: this.u(22),
+          height: this.u(18),
           x: px,
-          y: py + m.panelH - this.u(48)
+          y: py + Math.round((m.panelH - this.u(18)) / 2)
         })
       )
       return
@@ -967,64 +975,22 @@ export class TableView {
 
     if (!hand || hand.phase === 'over') return
 
-    let y = py + this.u(44)
-    const match = this.board
-    if (match) {
-      this.content.addChild(
-        makeText(`第 ${match.roundIndex} 局 · 第 ${match.hands + 1} 把`, {
-          size: this.u(11),
-          color: COLORS.mist,
-          align: 'center',
-          width: textW,
-          height: this.u(16),
-          x: tx,
-          y
-        })
-      )
-      if (hand.isFirstHand) {
-        this.content.addChild(
-          makeText('首牌', {
-            size: this.u(10),
-            color: COLORS.brass,
-            align: 'right',
-            width: textW,
-            height: this.u(16),
-            x: tx,
-            y
-          })
-        )
-      }
-      y += this.u(19)
-    }
+    const panel = makePanel(m.panelW, m.panelH, this.u(10), 'rgba(7,28,23,0.62)', 'rgba(217,180,95,0.22)')
+    panel.pos(px, py)
+    this.content.addChild(panel)
 
     const status = this.phase === 'dealing' ? `发牌 ${this.dealProgress}/53` : `牌山 ${remainingTiles(hand)}`
     this.content.addChild(
       makeText(status, {
-        size: this.u(11),
+        size: this.u(10),
         color: COLORS.mist,
         align: 'center',
-        width: textW,
-        height: this.u(16),
-        x: tx,
-        y
+        width: m.panelW,
+        height: this.u(14),
+        x: px,
+        y: py + this.u(7)
       })
     )
-    y += this.u(19)
-
-    if (this.phase === 'dealing' && this.dice) {
-      this.content.addChild(
-        makeText(`${this.dice.a}+${this.dice.b}=${this.dice.a + this.dice.b} · 东家 ${SEAT_NAMES[hand.dealerSeat]}`, {
-          size: this.u(11),
-          color: COLORS.brass,
-          align: 'center',
-          width: textW,
-          height: this.u(16),
-          x: tx,
-          y
-        })
-      )
-      y += this.u(19)
-    }
 
     const actor = this.currentActor(hand)
     const turnText =
@@ -1041,91 +1007,35 @@ export class TableView {
               : `轮到${SEAT_NAMES[actor]}`
     this.content.addChild(
       makeText(turnText, {
-        size: this.u(15),
+        size: this.u(14),
         color: COLORS.ivory,
         font: FONT_SERIF,
         align: 'center',
-        width: textW,
-        height: this.u(22),
-        x: tx,
-        y
+        width: m.panelW,
+        height: this.u(20),
+        x: px,
+        y: py + this.u(21)
       })
     )
-    y += this.u(26)
+  }
 
-    if (hand.lastPlayed) {
-      const lastW = Math.round(m.oppW * 1.05)
-      const tile = new TileView(hand.lastPlayed.tile, { width: lastW, marked: true, flat: true })
-      tile.pos(Math.round(cx - lastW - this.u(38)), Math.round(y))
-      this.content.addChild(tile)
-      this.content.addChild(
-        makeText(`刚打 ${SEAT_NAMES[hand.lastPlayed.seat]}`, {
-          size: this.u(11),
-          color: COLORS.mist,
-          width: this.u(110),
-          height: this.u(16),
-          x: Math.round(cx + this.u(4)),
-          y: y + this.u(2)
-        })
-      )
-      y += tile.h + this.u(6)
-    }
-
-    // 接牌 / 自摸成牌 / 自家杠：都放在中央面板底部
-    const actions = this.phase === 'playing' ? legalActions(hand, 0) : []
-    const myTurnNow = this.currentActor(hand) === 0
-    const winAction = actions.find((action): action is Extract<RoundAction, { type: 'win' }> => action.type === 'win')
-    const kongActions = actions.filter((action): action is Extract<RoundAction, { type: 'kong' }> => action.type === 'kong')
-    const panelButtons: Array<{ label: string; face: 'tile' | 'chip'; width: number; action?: RoundAction; onPress?: () => void }> = []
-
-    if (hand.phase === 'claim' && myTurnNow) {
-      for (const action of actions) {
-        if (action.type === 'pass') {
-          panelButtons.push({ label: '过', face: 'chip', width: this.u(36), action })
-        } else if (action.type === 'claim') {
-          panelButtons.push({ label: action.claim, face: 'tile', width: this.u(36), action })
-        }
-      }
-    } else if (hand.phase === 'discard' && myTurnNow) {
-      if (winAction && !this.declinedWin) {
-        panelButtons.push({ label: '成', face: 'tile', width: this.u(38), action: winAction })
-        panelButtons.push({
-          label: '打',
-          face: 'chip',
-          width: this.u(38),
-          onPress: () => {
-            this.declinedWin = true
-            this.render()
-          }
-        })
-      } else {
-        for (const action of kongActions) {
-          panelButtons.push({ label: `杠${action.tile}`, face: 'chip', width: this.u(50), action })
-        }
-      }
-    }
-
-    if (panelButtons.length) {
-      const total = panelButtons.reduce((sum, item) => sum + item.width + this.u(5), -this.u(5))
-      let bx = cx - total / 2
-      const by = Math.min(py + m.panelH - this.u(28), y + this.u(2))
-      for (const item of panelButtons) {
-        const button = makeButton({
-          width: item.width,
-          height: this.u(24),
-          label: item.label,
-          fontSize: item.label.length > 2 ? this.u(9) : this.u(10),
-          face: item.face,
-          onClick: () => {
-            if (item.action) this.act(item.action)
-            else item.onPress?.()
-          }
-        })
-        button.pos(Math.round(bx), Math.round(by))
-        this.content.addChild(button)
-        bx += item.width + this.u(5)
-      }
-    }
+  /** 左上角：第几局第几把（原来在中央面板里，挪出来让中间更小） */
+  private renderTopHud() {
+    if (this.is3D()) return
+    const match = this.board
+    if (this.phase !== 'playing' || !match) return
+    const hand = this.hand
+    const text = `第 ${match.roundIndex} 局 · 第 ${match.hands + 1} 把${hand?.isFirstHand ? ' · 首牌' : ''}`
+    this.content.addChild(
+      makeText(text, {
+        size: this.u(9),
+        color: COLORS.mist,
+        width: this.u(160),
+        height: this.u(14),
+        x: this.u(50),
+        y: this.u(9)
+      })
+    )
   }
 
   /* ------------------------------------------------------------------ *
@@ -1308,7 +1218,9 @@ export class TableView {
     count: number
   ) {
     const m = this.m
-    const rowW = Math.max(13, tiles.length) * m.oppW
+    // 对家缩到 90%，牌与牌紧挨着（没有缝）
+    const oppW = Math.max(18, Math.round(m.oppW * 0.9))
+    const rowW = Math.max(13, tiles.length) * oppW
     const blockW = Math.max(this.u(180), rowW)
     const x = m.boardW / 2 - blockW / 2
     let y = this.u(4)
@@ -1319,22 +1231,21 @@ export class TableView {
 
     const rack = player && player.melds.length ? this.meldRackHorizontal(player.melds, m.meldW) : null
     const rackW = rack ? rack.width + this.u(8) : 0
-    const seatGap = Math.max(2, Math.round(m.oppW * 0.05))
-    const handW = Math.max(0, tiles.length * m.oppW + Math.max(0, tiles.length - 1) * seatGap)
+    const handW = Math.max(0, tiles.length * oppW)
     const totalW = rackW + handW
     const startX = m.boardW / 2 - totalW / 2
     if (rack) {
-      rack.pos(Math.round(startX), Math.round(y + m.oppH - rack.height))
+      rack.pos(Math.round(startX), Math.round(y + Math.round(oppW * TILE_RATIO) - rack.height))
       this.content.addChild(rack)
     }
     let hx = startX + rackW
     for (let i = 0; i < tiles.length; i += 1) {
       const tile = reveal
-        ? new TileView(tiles[i], { width: m.oppW, marked: i === tiles.length - 1 })
-        : new TileView('', { width: m.oppW, back: true })
+        ? new TileView(tiles[i], { width: oppW, marked: i === tiles.length - 1 })
+        : new TileView('', { width: oppW, back: true })
       tile.pos(Math.round(hx), Math.round(y))
       this.content.addChild(tile)
-      hx += m.oppW + seatGap
+      hx += oppW
     }
   }
 
@@ -1352,9 +1263,9 @@ export class TableView {
     const m = this.m
     const rotate = left ? 90 : -90
     const colW = m.sideH
-    const sideGap = Math.max(1, Math.round(m.sideW * 0.055))
+    const sideGap = 0
     const slots = Math.max(2, tiles.length)
-    const handLen = slots * m.sideW + Math.max(0, slots - 1) * sideGap
+    const handLen = slots * m.sideW
     const rack = player && player.melds.length ? this.meldRackVertical(player.melds, m.meldW, rotate) : null
     const infoH = this.u(52)
     const blockH = infoH + handLen + (rack ? this.u(6) + rack.height : 0)
@@ -1373,8 +1284,8 @@ export class TableView {
     let cy = y + infoH
     for (let i = 0; i < tiles.length; i += 1) {
       const tile = reveal
-        ? new TileView(tiles[i], { width: m.sideW, rotate, marked: i === tiles.length - 1 })
-        : new TileView('', { width: m.sideW, back: true, rotate })
+        ? new TileView(tiles[i], { width: m.sideW, rotate, stripAtBottom: true, marked: i === tiles.length - 1 })
+        : new TileView('', { width: m.sideW, back: true, rotate, stripAtBottom: true })
       tile.pos(Math.round(x + blockW / 2), Math.round(cy + m.sideW / 2))
       this.content.addChild(tile)
       cy += m.sideW + sideGap
@@ -1797,6 +1708,65 @@ export class TableView {
       items.push(makeText(status, { size: this.u(10), color: COLORS.mist, width: this.u(180), height: this.u(16) }))
     } else if (this.phase === 'rolling') {
       items.push(makeText('掷骰…', { size: this.u(11), color: COLORS.mist, width: this.u(60), height: this.u(16) }))
+    }
+
+    // 接牌 / 自摸成牌 / 自家杠：2D 也收进操作条，不再占中央面板
+    if (!this.is3D() && this.phase === 'playing' && myTurn) {
+      const acts = legalActions(hand, 0)
+      if (hand.phase === 'claim') {
+        for (const action of acts) {
+          if (action.type === 'pass') {
+            items.push(
+              makeButton({ width: this.u(34), height: this.u(24), label: '过', fontSize: this.u(10), face: 'chip', onClick: () => this.act(action) })
+            )
+          } else if (action.type === 'claim') {
+            items.push(
+              makeButton({
+                width: this.u(38),
+                height: this.u(24),
+                label: action.claim,
+                fontSize: this.u(10),
+                face: 'tile',
+                onClick: () => this.act(action)
+              })
+            )
+          }
+        }
+      } else if (hand.phase === 'discard') {
+        const winAction = acts.find((action): action is Extract<RoundAction, { type: 'win' }> => action.type === 'win')
+        const kongActions = acts.filter((action): action is Extract<RoundAction, { type: 'kong' }> => action.type === 'kong')
+        if (winAction && !this.declinedWin) {
+          items.push(
+            makeButton({ width: this.u(38), height: this.u(24), label: '成', fontSize: this.u(10), face: 'tile', onClick: () => this.act(winAction) })
+          )
+          items.push(
+            makeButton({
+              width: this.u(38),
+              height: this.u(24),
+              label: '打',
+              fontSize: this.u(10),
+              face: 'chip',
+              onClick: () => {
+                this.declinedWin = true
+                this.render()
+              }
+            })
+          )
+        } else {
+          for (const action of kongActions) {
+            items.push(
+              makeButton({
+                width: this.u(46),
+                height: this.u(24),
+                label: `杠${action.tile}`,
+                fontSize: this.u(9),
+                face: 'chip',
+                onClick: () => this.act(action)
+              })
+            )
+          }
+        }
+      }
     }
 
     if (this.is3D()) this.appendDock3DActions(items, hand, myTurn)
