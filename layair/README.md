@@ -2,6 +2,10 @@
 
 把 web 端（`src/`）的牌桌玩法完整迁移到 LayaAir 3.4，一套代码同时跑浏览器和微信小游戏。
 
+**运行模式**：默认 2D 平面牌桌；地址栏加 `?3d=1` 切到 3D 牌桌，`?2d=1` 显式指定 2D。
+
+![2D 牌桌](docs/screenshots/2d-table.png)
+
 | 横屏 · 3D 牌桌（手机默认） | 横屏 · 3D 结算 |
 | --- | --- |
 | ![3D 牌桌](docs/screenshots/3d-table.png) | ![3D 结算](docs/screenshots/3d-settlement.png) |
