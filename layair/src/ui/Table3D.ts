@@ -36,21 +36,22 @@ const TABLE_D = 1080
  * 所以牌体中心 = 桌沿 - 留白 - TILE_T / 2。
  */
 const HAND_EDGE_GAP = TILE_T
-const HAND_Z_SELF = TABLE_D / 2 - HAND_EDGE_GAP - TILE_T / 2
-const HAND_Z_OPP = -HAND_Z_SELF
+const HAND_Z_SELF = 380
+const HAND_Z_OPP = -380
 const HAND_X_SIDE = TABLE_W / 2 - HAND_EDGE_GAP - TILE_T / 2
 /**
  * 牌墙：一墩就是一张平躺的牌，和手里的是同一个模型、同一套尺寸；
  * 不再单独做一套「又细又小」的牌墙（那套比手牌小一半，看着不像牌）。
  */
 const STACKS = 17
-/** 一整条牌墙的墩距固定 60：牌宽 54，所以 17 墩之间每墩空出 6 的缝，不会叠在一起 */
-const WALL_STEP = 60
+/** 牌墙也按牌宽紧挨着排；整圈长度由 17 墩决定 */
+const WALL_STEP = TILE_W
 const WALL_LEN = TILE_W
 const WALL_SPAN = STACKS * WALL_STEP
 /** 牌墙 / 副露 / 牌河的摆放线（离桌心的距离），由外向内依次是 手牌 → 牌墙 → 副露 → 牌河 */
-const WALL_Z = 430
-const WALL_X = 430
+const WALL_Z = WALL_SPAN / 2
+const WALL_X = WALL_SPAN / 2
+const WALL_Z_SELF = 300
 const MELD_Z = 315
 const MELD_X = 315
 const DISCARD_Z = 195
@@ -120,12 +121,11 @@ export class Table3D {
     this.camera = camera
     this.camera.cullingMask = 0xffffffff
     this.camera.nearPlane = 1
-    // 视角略收窄（40 → 32）压一点透视，远处的牌墙不会比手牌小太多；
-    // 相机同时相应后撤，保证近端桌沿不被切掉、整桌仍然填满画面。
+    // 固定相机稍收窄，保证自己的手牌清楚，同时整桌和四家牌河都在画面内。
     this.camera.farPlane = 16000
-    this.camera.fieldOfView = 40
-    this.camera.transform.position = new Laya.Vector3(0, 1230, 1340)
-    this.camera.transform.rotationEuler = new Laya.Vector3(-37, 0, 0)
+    this.camera.fieldOfView = 38
+    this.camera.transform.position = new Laya.Vector3(0, 1260, 1380)
+    this.camera.transform.rotationEuler = new Laya.Vector3(-42, 0, 0)
 
     this.tableRoot = new Laya.Sprite3D()
     this.dynamicRoot = new Laya.Sprite3D()
@@ -461,7 +461,7 @@ export class Table3D {
           if (seat === 2 || seat === 0) {
             // 上下两条墙：沿 x 排，进深朝 z
             const x = -half + i * WALL_STEP + WALL_STEP / 2
-            const z = seat === 2 ? -WALL_Z : WALL_Z
+            const z = seat === 2 ? -WALL_Z : WALL_Z_SELF
             this.addTileBody(null, x, y, z, this.dynamicRoot, 'flatDown')
           } else {
             // 左右两条墙：整墩转 90°，沿 z 排，进深朝 x
@@ -482,7 +482,7 @@ export class Table3D {
   ) {
     if (!tiles.length) return
     // 牌与牌留 2 的缝：不留缝时一排牌会糊成一条，看不出几张
-    const step = Math.min(TILE_W + 3, 960 / Math.max(1, tiles.length))
+    const step = Math.min(TILE_W - 0.4, 960 / Math.max(1, tiles.length))
     const startX = -((tiles.length - 1) * step) / 2
     for (let i = 0; i < tiles.length; i += 1) {
       const tile = tiles[i]
@@ -566,10 +566,32 @@ export class Table3D {
         z = ((maxCols - 1) * colStep) / 2 - col * colStep
         rotation = -90
       }
-      const node = this.addFlatTile(tile, x, z, this.dynamicRoot, rotation)
+      this.addFlatTile(tile, x, z, this.dynamicRoot, rotation)
       if (last && last.seat === seat && last.tile === tile && i === tiles.length - 1) {
-        this.lastMark = this.projectGroup(node, TILE_W, TILE_T, TILE_H)
+        this.lastMark = this.markFlatTile(x, z, rotation)
       }
+    }
+  }
+
+  /** 最后打出的牌：按旋转后的顶面四角投影，得到精确的 2D 描边区域 */
+  private markFlatTile(x: number, z: number, rotationY: number) {
+    const y = TILE_T / 2 + 2 + TILE_T / 2 + 1
+    const a = (rotationY * Math.PI) / 180
+    const c = Math.cos(a)
+    const s = Math.sin(a)
+    const hw = TILE_W / 2
+    const hh = TILE_H / 2
+    const corners: Array<[number, number]> = [
+      [-hw, -hh], [hw, -hh], [hw, hh], [-hw, hh]
+    ]
+    const pts = corners.map(([px, pz]) => this.project(x + px * c + pz * s, y, z - px * s + pz * c))
+    const xs = pts.map(p => p[0])
+    const ys = pts.map(p => p[1])
+    return {
+      x: Math.min(...xs),
+      y: Math.min(...ys),
+      w: Math.max(...xs) - Math.min(...xs),
+      h: Math.max(...ys) - Math.min(...ys)
     }
   }
 

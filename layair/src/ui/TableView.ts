@@ -1463,22 +1463,24 @@ export class TableView {
       )
     }
 
-    // 只给最后打出的那张牌加黄色描边，不再写“刚打某家”
+    // 只框最后打出的那一张牌；四角由 3D 顶面投影，侧家旋转后也不会框错
     const mark = this.three?.lastMark
     if (mark && mark.w > 0 && mark.h > 0) {
       const gx = mark.x - m.boardX
       const gy = mark.y - m.boardY
-      this.content.graphics.drawRoundRect(
-        Math.round(gx) - this.u(3),
-        Math.round(gy) - this.u(3),
-        Math.round(mark.w) + this.u(6),
-        Math.round(mark.h) + this.u(6),
-        this.u(4), this.u(4), this.u(4), this.u(4),
-        null as any,
-        '#F5C542',
-        Math.max(2, this.u(2))
-      )
+      const x0 = Math.round(gx)
+      const y0 = Math.round(gy)
+      const x1 = x0 + Math.round(mark.w)
+      const y1 = y0 + Math.round(mark.h)
+      const lw = 2
+      const frame = new Laya.Sprite()
+      frame.graphics.drawRect(x0, y0, x1 - x0, lw, '#F5C542')
+      frame.graphics.drawRect(x0, y1 - lw, x1 - x0, lw, '#F5C542')
+      frame.graphics.drawRect(x0, y0 + lw, lw, y1 - y0 - lw * 2, '#F5C542')
+      frame.graphics.drawRect(x1 - lw, y0 + lw, lw, y1 - y0 - lw * 2, '#F5C542')
+      this.content.addChild(frame)
     }
+
   }
 
   /** 3D 手牌只保留投影后的点击层 + 可打/禁打描边 */
