@@ -260,8 +260,9 @@ const TablePage = defineComponent({
       const margin = Math.round(Math.min(width, height) * 0.024)
       const availW = width - margin * 2
       const availH = height - margin * 2
-      // 牌桌别拉成一条：接近真实牌桌的横宽比，竖屏也不占满整屏
-      const boardWidth = Math.min(availW, Math.round(availH * 1.16))
+      // 牌桌横宽比：竖屏按 1.16（近似正方形牌桌），横屏放宽容纳，别在两边留一大条空
+      const aspect = width > height * 1.2 ? 1.62 : 1.16
+      const boardWidth = Math.min(availW, Math.round(availH * aspect))
       const boardHeight = Math.min(availH, Math.round(boardWidth * 1.5))
       // 手牌一行 14 张（加上间隙）要放得下，所以按 0.93 个基准宽算
       const base = Math.min(boardWidth / 0.93, boardHeight / 0.98)
@@ -530,37 +531,32 @@ const TablePage = defineComponent({
                 >
                   {/* 骰子：掷完就缩小让位，点数已经不重要了 */}
                   <div class="flex items-center gap-1.5">
-                    <Dice value={shownDice.value.a} rolling={rolling} size={rolling ? 'calc(var(--ring-h) * 0.105)' : 'calc(var(--ring-h) * 0.042)'} />
-                    <Dice value={shownDice.value.b} rolling={rolling} size={rolling ? 'calc(var(--ring-h) * 0.105)' : 'calc(var(--ring-h) * 0.042)'} />
+                    <Dice value={shownDice.value.a} rolling={rolling} size={rolling ? 'calc(var(--ring-h) * 0.105)' : 'calc(var(--ring-h) * 0.072)'} />
+                    <Dice value={shownDice.value.b} rolling={rolling} size={rolling ? 'calc(var(--ring-h) * 0.105)' : 'calc(var(--ring-h) * 0.072)'} />
                     {!rolling && dice.value && (
                       <span class="font-serif text-[12px] leading-none text-brass">{dice.value.a + dice.value.b} 点</span>
                     )}
                   </div>
 
-                  {/* 局/把：放在中央面板里，窄屏也不会跟座位标签打架 */}
-                  {match && (
-                    <div class="text-[11px] leading-4 text-mist">
-                      第 <span class="text-ivory">{match.roundIndex}</span> 局 · 第{' '}
-                      <span class="text-ivory">{match.hands + 1}</span> 把
-                      {hand?.isFirstHand && <span class="ml-1 text-brass">首牌</span>}
-                    </div>
-                  )}
-
-                  <div class="text-[11px] leading-4 text-mist">
-                    {rolling
-                      ? '掷骰…'
-                      : phase.value === 'dealing'
-                        ? `发牌 ${dealProgress.value}/53`
-                        : hand
-                          ? `牌山 ${remainingTiles(hand)}`
-                          : '牌山 136'}
+                  {/* 一行状态：局/把 · 牌山（发牌阶段换成进度），不再拆成三行 */}
+                  <div class="flex items-center justify-center gap-1.5 whitespace-nowrap text-[10px] leading-4 text-mist">
+                    {match && (
+                      <span>
+                        第 <span class="text-ivory">{match.roundIndex}</span> 局 · 第{' '}
+                        <span class="text-ivory">{match.hands + 1}</span> 把
+                      </span>
+                    )}
+                    {hand?.isFirstHand && <span class="text-brass">首牌</span>}
+                    <span>
+                      {rolling
+                        ? '掷骰…'
+                        : phase.value === 'dealing'
+                          ? `发牌 ${dealProgress.value}/53`
+                          : hand
+                            ? `牌山 ${remainingTiles(hand)}`
+                            : '牌山 136'}
+                    </span>
                   </div>
-
-                  {phase.value === 'dealing' && dice.value && (
-                    <div class="text-[11px] leading-4 text-brass">
-                      {dice.value.a}+{dice.value.b}={dice.value.a + dice.value.b} · 东家 {SEAT_NAMES[hand?.dealerSeat ?? 0]}
-                    </div>
-                  )}
 
                   {playing && (
                     <div class="font-serif text-[15px] leading-5 tracking-[0.08em] text-ivory">
@@ -585,37 +581,6 @@ const TablePage = defineComponent({
                   )}
 
                   {/* 接牌按钮 */}
-                  {playing && hand?.phase === 'claim' && isMyTurn.value && (
-                    <div class="mt-0.5 flex flex-wrap justify-center gap-1">
-                      {myClaims.value.map(action => {
-                        if (action.type === 'pass') {
-                          return (
-                            <button
-                              key="pass"
-                              type="button"
-                              class="chip tile-press claim-in rounded-lg px-2.5 py-1 font-serif text-[12px]"
-                              onClick={() => act(action)}
-                            >
-                              过
-                            </button>
-                          )
-                        }
-                        if (action.type === 'claim') {
-                          return (
-                            <button
-                              key={action.claim}
-                              type="button"
-                              class="tile-face-sm tile-press claim-in rounded-lg px-2.5 py-1 font-serif text-[12px] text-ink"
-                              onClick={() => act(action)}
-                            >
-                              {action.claim}
-                            </button>
-                          )
-                        }
-                        return null
-                      })}
-                    </div>
-                  )}
 
                 </div>
 
@@ -804,6 +769,35 @@ const TablePage = defineComponent({
                 }}
               >
                 <div class="action-dock">
+                  {/* 接牌：碰 / 杠 / 成 / 过 跟操作条一起，不再压在牌河上 */}
+                  {playing && hand?.phase === 'claim' && isMyTurn.value &&
+                    myClaims.value.map(action => {
+                      if (action.type === 'pass') {
+                        return (
+                          <button
+                            key="pass"
+                            type="button"
+                            class="chip tile-press claim-in rounded-lg px-2.5 py-1 font-serif text-[12px]"
+                            onClick={() => act(action)}
+                          >
+                            过
+                          </button>
+                        )
+                      }
+                      if (action.type === 'claim') {
+                        return (
+                          <button
+                            key={action.claim}
+                            type="button"
+                            class="tile-face-sm tile-press claim-in rounded-lg px-2.5 py-1 font-serif text-[12px] text-ink"
+                            onClick={() => act(action)}
+                          >
+                            {action.claim}
+                          </button>
+                        )
+                      }
+                      return null
+                    })}
                   {hand && (
                     <span class="whitespace-nowrap pl-1 text-[10px] leading-none text-mist">
                       <span class="text-ivory">{SEAT_NAMES[0]}</span>
@@ -875,7 +869,7 @@ const TablePage = defineComponent({
                     </>
                   )}
 
-                  {playing && !isOver && hand!.phase !== 'choose-shortage' && !(hand!.phase === 'draw' && isMyTurn.value) && (
+                  {playing && !isOver && hand!.phase !== 'choose-shortage' && hand!.phase !== 'claim' && !(hand!.phase === 'draw' && isMyTurn.value) && (
                     <span class="px-3 py-1 text-[11px] text-mist">
                       {isMyTurn.value
                         ? mustPlayShortage.value
