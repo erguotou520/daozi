@@ -654,6 +654,11 @@ function mergeRules(overrides?: Partial<Rules>): Rules {
   }
 }
 
+/** 金额最小单位是 5 元：点数折算的钱四舍五入到 5 元的整数倍，战绩里就不会出现 34.5 这种小数 */
+export function roundMoneyToFive(value: number): number {
+  return Math.round(value / 5) * 5
+}
+
 export function scoreHand(input: ScoreInput): ScoreResult {
   const rules = mergeRules(input.rules)
   const melds = input.melds ?? []
@@ -942,7 +947,7 @@ export function scoreHand(input: ScoreInput): ScoreResult {
   const moziMoney = moziBig * rules.moziYuan.big + moziSmall * rules.moziYuan.small
 
   // —— 金额 ——
-  const pointMoneyPerOpponent = isBigWin ? rules.bigWinMoneyPerPlayer : total * rules.pointYuan
+  const pointMoneyPerOpponent = isBigWin ? rules.bigWinMoneyPerPlayer : roundMoneyToFive(total * rules.pointYuan)
   const bigWinMoneyPerOpponent = isBigWin ? rules.bigWinMoneyPerPlayer : 0
   const moziMoneyPerOpponent = moziMoney
   const perOpponentTotal = isBigWin
@@ -961,7 +966,7 @@ export function scoreHand(input: ScoreInput): ScoreResult {
   if (isBigWin) {
     details.push(`大拿：${bigWinReasons.map(reason => reason.name).join('、')}；普通点子不再计算，按每家 ${rules.bigWinMoneyPerPlayer} 元结算`)
   } else {
-    details.push(`点数结算：每家 ${pointMoneyPerOpponent} 元（1 点 = ${rules.pointYuan} 元）`)
+    details.push(`点数结算：每家 ${pointMoneyPerOpponent} 元（1 点 = ${rules.pointYuan} 元，按 5 元取整）`)
   }
   if (moziUnits > 0) {
     details.push(

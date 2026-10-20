@@ -110,7 +110,7 @@ try {
   FAST = false
 }
 
-const moneyText = (value: number) => `${value > 0 ? '+' : ''}${Number(value.toFixed(1))}`
+const moneyText = (value: number) => `${value > 0 ? '+' : ''}${Math.round(value)}`
 
 export class TableView {
   private owner: Laya.Sprite
@@ -1825,10 +1825,6 @@ export class TableView {
     const result = this.settlement()
     const gameOver = !!result?.gameOver
     const bigWin = !!win?.score.bigWin.isBigWin
-    const showMoneyRow = gameOver || bigWin
-    const pointLines = win ? win.score.details.filter(line => gameOver || !/(元|应付)/.test(line)) : []
-    const detailCount = Math.min(pointLines.length, this.is3D() ? 3 : m.landscape ? 4 : gameOver ? 8 : 7)
-    const detailUnit = m.landscape ? 12 : 15
 
     const side3D = this.is3D()
     const panelW = Math.round(
@@ -1863,8 +1859,9 @@ export class TableView {
     }
 
     // 面板高度按内容算，避免一大片空白把别人的亮牌挡住
-    let used = 8 + 14 + 28 + 46 + detailCount * detailUnit + 6
-    if (showMoneyRow) used += 20
+    let used = 8 + 14 + 28 + 46 + 38 + 6
+    if (bigWin) used += 14
+    if (gameOver) used += 18
     const dockTop = m.boardH - this.u(6) - m.handH - this.u(32) - this.u(4)
     const maxH = m.landscape ? Math.max(220, dockTop - m.ringY - this.u(6)) : m.ringH * 0.92
     const panelH = Math.round(Math.min(maxH, this.u(used)))
@@ -1915,12 +1912,25 @@ export class TableView {
       makeText(win.selfDraw ? '自摸' : '接牌', {
         size: this.u(10),
         color: COLORS.mist,
-        width: this.u(42),
+        width: this.u(34),
         height: this.u(18),
         x: px + this.u(70),
         y: y + this.u(3)
       })
     )
+    // 大拿 / 清水 徽标跟在「自摸 / 接牌」右侧，红色底保留
+    if (bigWin) {
+      let badgeX = px + this.u(70) + this.u(40) + this.u(4)
+      const badge = this.makeBadge('大拿', COLORS.vermillion, COLORS.ivory)
+      badge.pos(badgeX, y + this.u(1))
+      this.content.addChild(badge)
+      badgeX += badge.width + this.u(4)
+      if (hand.isFirstHand) {
+        const qing = this.makeBadge('清水', COLORS.brass, COLORS.ink)
+        qing.pos(badgeX, y + this.u(1))
+        this.content.addChild(qing)
+      }
+    }
     this.content.addChild(
       makeText(`${win.score.points.total}`, {
         size: this.u(24),
@@ -1946,34 +1956,34 @@ export class TableView {
     )
     y += this.u(28)
 
-    if (showMoneyRow) {
-      let badgeX = px + this.u(13)
-      if (bigWin) {
-        const badge = this.makeBadge('大拿', COLORS.vermillion, COLORS.ivory)
-        badge.pos(badgeX, y)
-        this.content.addChild(badge)
-        badgeX += badge.width + this.u(6)
-        if (hand.isFirstHand) {
-          const qing = this.makeBadge('清水', COLORS.brass, COLORS.ink)
-          qing.pos(badgeX, y)
-          this.content.addChild(qing)
-        }
-      }
-      // 一局还没结束时只算点数，不显示要付多少钱
-      if (gameOver) {
-        this.content.addChild(
-          makeText(`${win.score.money.perOpponentTotal} 元/家 · 合计 ${win.score.money.total} 元`, {
-            size: this.u(11),
-            color: COLORS.brass,
-            align: 'right',
-            width: panelW - this.u(24),
-            height: this.u(16),
-            x: px + this.u(12),
-            y
-          })
-        )
-      }
-      y += this.u(20)
+    if (bigWin) {
+      const reasons = win.score.bigWin.reasons.map(reason => reason.name).join(' + ')
+      this.content.addChild(
+        makeText(`大拿：${reasons}`, {
+          size: this.u(9),
+          color: COLORS.vermillion,
+          width: panelW - this.u(24),
+          height: this.u(14),
+          x: px + this.u(13),
+          y
+        })
+      )
+      y += this.u(14)
+    }
+
+    // 一局还没结束时只算点数，不显示要付多少钱
+    if (gameOver) {
+      this.content.addChild(
+        makeText(`${win.score.money.perOpponentTotal} 元/家 · 合计 ${win.score.money.total} 元`, {
+          size: this.u(10),
+          color: COLORS.brass,
+          width: panelW - this.u(24),
+          height: this.u(16),
+          x: px + this.u(12),
+          y
+        })
+      )
+      y += this.u(18)
     }
 
     const cellGap = this.u(4)
@@ -2016,11 +2026,17 @@ export class TableView {
     }
     y += this.u(46)
 
-    const detail = makeText(pointLines.slice(0, detailCount).join('\n'), {
-      size: m.landscape ? this.u(9) : this.u(10),
+    // 牌型明细：一行按「名字+点」并列铺开，比每个牌型一行省尺寸，也看得出 52 点怎么来的
+    const itemText = win.score.points.items
+      .map(item => `${item.name}${item.points >= 0 ? '+' : ''}${item.points}`)
+      .join(' · ')
+    const subtotal = win.score.points.items.reduce((sum, item) => sum + item.points, 0)
+    const summary = `${itemText}  ＝ 小计 ${subtotal} 点 × ${win.score.points.multiplier} = ${win.score.points.total} 点`
+    const detail = makeText(summary, {
+      size: this.u(9),
       color: COLORS.mist,
       width: panelW - this.u(26),
-      height: Math.max(this.u(20), detailCount * this.u(detailUnit)),
+      height: this.u(40),
       x: px + this.u(13),
       y
     })

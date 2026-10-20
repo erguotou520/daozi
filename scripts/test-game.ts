@@ -218,7 +218,7 @@ console.log('='.repeat(72))
 
   const settlement = settleHand(state)
   check('点数变化（0 号位 +102）', settlement?.pointDelta.join(','), '102,-34,-34,-34')
-  check('金额变化（0 号位 +81）', settlement?.moneyDelta.join(','), '81,-27,-27,-27')
+  check('金额变化（0 号位 +75，按 5 元取整）', settlement?.moneyDelta.join(','), '75,-25,-25,-25')
   check('本局还没结束', settlement?.gameOver, false)
   // 一把的进出必须配平：点数可能被「付完为止」截断，但金额不能凭空多出来
   const sum = (list: number[]) => Number(list.reduce((a, b) => a + b, 0).toFixed(1))
@@ -447,7 +447,7 @@ const fakeSettlement = (winnerSeat: number): HandSettlement => {
   check('赢家获得下把掷骰权', match.rollerSeat, 0)
   check('本局继续（没人被付完）', match.roundIndex, 1)
   check('本局已打 1 把', match.hands, 1)
-  check('本局金额记录', match.money.join(','), '81,-27,-27,-27')
+  check('本局金额记录（按 5 元取整）', match.money.join(','), '75,-25,-25,-25')
   const second = startHand(match, 1, 4, { hands, piles })
   check('第二把不再是首牌', second.current?.isFirstHand, false)
   // 点数要一把一把往下滚，第二把开局带的是上把结算后的点数

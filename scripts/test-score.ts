@@ -204,6 +204,31 @@ console.log('='.repeat(72))
   check('边张但外面只有 2 张 → 不算枯只压', kuFew.mozi.items.some(i => i.name === '枯只压'), false)
 }
 
+// 金额 5 元取整：点数折算的钱四舍五入到 5 元，战绩里不会再出现 34.5 这种小数
+{
+  const r = scoreHand({
+    concealed: ['4万', '4万', '4万', '5万', '5万', '5万', '6筒', '6筒'],
+    melds: [
+      { kind: '碰', tile: '4筒' },
+      { kind: '碰', tile: '北' }
+    ] as Meld[],
+    winTile: '5万',
+    selfDraw: true
+  })
+  check('52 点大拿 → 每家金额是 5 的倍数', r.money.perOpponentTotal % 5, 0)
+  check('三家合计也是 5 的倍数', r.money.total % 5, 0)
+  const odd = scoreHand({
+    concealed: ['4万', '4万', '4万', '5万', '6万', '6万', '5万', '北', '北'],
+    melds: [
+      { kind: '碰', tile: '4筒' },
+      { kind: '碰', tile: '北' }
+    ] as Meld[],
+    winTile: '5万',
+    selfDraw: true
+  })
+  check('38 点 → 每家金额是 5 的倍数', odd.money.perOpponentTotal % 5, 0)
+}
+
 // 杠后赛花：摸子翻倍
 {
   const concealed = [...suitTiles('筒'), '5条', '5条']
