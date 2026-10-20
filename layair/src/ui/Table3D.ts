@@ -120,9 +120,9 @@ export class Table3D {
     this.camera.nearPlane = 1
     // 固定相机稍收窄，保证自己的手牌清楚，同时整桌和四家牌河都在画面内。
     this.camera.farPlane = 16000
-    this.camera.fieldOfView = 50
-    this.camera.transform.position = new Laya.Vector3(0, 900, 1150)
-    this.camera.transform.rotationEuler = new Laya.Vector3(-48, 0, 0)
+    this.camera.fieldOfView = 38
+    this.camera.transform.position = new Laya.Vector3(0, 850, 1050)
+    this.camera.transform.rotationEuler = new Laya.Vector3(-58, 0, 0)
 
     this.tableRoot = new Laya.Sprite3D()
     this.dynamicRoot = new Laya.Sprite3D()

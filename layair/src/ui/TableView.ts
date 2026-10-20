@@ -1472,13 +1472,17 @@ export class TableView {
       const y0 = Math.round(gy)
       const x1 = x0 + Math.round(mark.w)
       const y1 = y0 + Math.round(mark.h)
-      const lw = 2
-      const frame = new Laya.Sprite()
-      frame.graphics.drawRect(x0, y0, x1 - x0, lw, '#F5C542')
-      frame.graphics.drawRect(x0, y1 - lw, x1 - x0, lw, '#F5C542')
-      frame.graphics.drawRect(x0, y0 + lw, lw, y1 - y0 - lw * 2, '#F5C542')
-      frame.graphics.drawRect(x1 - lw, y0 + lw, lw, y1 - y0 - lw * 2, '#F5C542')
-      this.content.addChild(frame)
+      const lw = 3
+      const arm = Math.max(6, Math.min(16, Math.round(Math.min(mark.w, mark.h) * 0.35)))
+      const g = this.content.graphics
+      g.drawLine(x0, y0, x0 + arm, y0, '#F5C542', lw)
+      g.drawLine(x0, y0, x0, y0 + arm, '#F5C542', lw)
+      g.drawLine(x1, y0, x1 - arm, y0, '#F5C542', lw)
+      g.drawLine(x1, y0, x1, y0 + arm, '#F5C542', lw)
+      g.drawLine(x0, y1, x0 + arm, y1, '#F5C542', lw)
+      g.drawLine(x0, y1, x0, y1 - arm, '#F5C542', lw)
+      g.drawLine(x1, y1, x1 - arm, y1, '#F5C542', lw)
+      g.drawLine(x1, y1, x1, y1 - arm, '#F5C542', lw)
     }
 
   }
