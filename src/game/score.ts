@@ -662,29 +662,52 @@ export function scoreHand(input: ScoreInput): ScoreResult {
   items.push({ name: '成牌', points: rules.basePoints, count: 1, detail: '任何成牌的底点' })
 
   // 对子：自家三张（暗刻）——按成牌结构里真实存在的刻子计算；七对里没有刻子
+  const structure = a.isSevenPairs ? null : structures[0]
   const concealedTripletsByTile = new Map<Tile, number>()
-  if (!a.isSevenPairs) {
-    const structure = structures[0]
-    if (structure) {
-      for (const set of structure.sets) {
-        if (set.kind === 'triplet') {
-          concealedTripletsByTile.set(set.tiles[0], (concealedTripletsByTile.get(set.tiles[0]) ?? 0) + 1)
-        }
+  if (structure) {
+    for (const set of structure.sets) {
+      if (set.kind === 'triplet') {
+        concealedTripletsByTile.set(set.tiles[0], (concealedTripletsByTile.get(set.tiles[0]) ?? 0) + 1)
       }
-    } else {
-      for (const [tile, n] of countsOf(input.concealed)) {
-        if (n >= 3) concealedTripletsByTile.set(tile, 1)
+    }
+  } else if (!a.isSevenPairs) {
+    for (const [tile, n] of countsOf(input.concealed)) {
+      if (n >= 3) concealedTripletsByTile.set(tile, 1)
+    }
+  }
+
+  // 接牌成刻：成牌张是别人打的，这个刻子相当于「借」一张凑成，只能按碰 1 点算。
+  // 自摸的成牌张是自己摸进手里的，仍然是暗刻 2 点。
+  let borrowedTripletTile: Tile | null = null
+  if (!input.selfDraw && input.winTile && a.winTileRole !== 'pair' && structure) {
+    for (const set of structure.sets) {
+      if (set.kind === 'triplet' && set.tiles.includes(input.winTile)) {
+        borrowedTripletTile = set.tiles[0]
+        break
       }
     }
   }
+
   let concealedTriplets = 0
   for (const [tile, sets] of concealedTripletsByTile) {
     concealedTriplets += sets
+    const borrowed = borrowedTripletTile === tile ? 1 : 0
+    const concealedSets = sets - borrowed
+    if (concealedSets > 0) {
+      items.push({
+        name: '自家三张',
+        points: rules.concealedTripletPoints * concealedSets,
+        count: concealedSets,
+        detail: `${tile} 暗刻${concealedSets > 1 ? ` ×${concealedSets}` : ''}`
+      })
+    }
+  }
+  if (borrowedTripletTile) {
     items.push({
-      name: '自家三张',
-      points: rules.concealedTripletPoints * sets,
-      count: sets,
-      detail: `${tile} 暗刻${sets > 1 ? ` ×${sets}` : ''}`
+      name: '碰',
+      points: rules.pungPoints,
+      count: 1,
+      detail: `借牌 ${borrowedTripletTile}（接牌成刻）`
     })
   }
   for (const meld of melds) {

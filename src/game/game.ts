@@ -9,6 +9,7 @@
 import {
   HONORS,
   NUMBER_SUITS,
+  countsOf,
   isHonor,
   meldTiles,
   parseTile,
@@ -27,6 +28,12 @@ export const STACKS_PER_WALL = 17
 const TILES_PER_SEAT_WALL = 34
 
 export type ClaimKind = '碰' | '杠' | '成'
+export type KongKind = '暗杠' | '加杠'
+
+export interface KongOption {
+  tile: Tile
+  kind: KongKind
+}
 
 export interface PlayerState {
   seat: number
@@ -55,6 +62,7 @@ export type RoundAction =
   | { type: 'draw'; seat: number }
   | { type: 'discard'; seat: number; tile: Tile }
   | { type: 'win'; seat: number }
+  | { type: 'kong'; seat: number; tile: Tile; kind: KongKind }
   | { type: 'claim'; seat: number; claim: ClaimKind }
   | { type: 'pass'; seat: number }
 
@@ -491,6 +499,27 @@ function buildPendingClaims(state: HandState, discardSeat: number, tile: Tile): 
   return candidates.map(candidate => candidate.seat)
 }
 
+/**
+ * 自家可杠的牌：手里四张（暗杠）+ 已碰过的牌又摸到第四张（加杠）。
+ * 缺门牌不能杠；只在该自己出牌的阶段可用。
+ */
+export function kongOptionsFor(state: HandState, seat: number): KongOption[] {
+  const player = state.players[seat]
+  if (state.phase !== 'discard' || state.turn !== seat) return []
+  // 碰完必须立即打出一张，不能马上接杠；必须等下一次摸牌后再杠。
+  if (!state.drawnTile) return []
+  const options: KongOption[] = []
+  for (const [tile, count] of countsOf(player.hand)) {
+    if (count >= 4 && !isShortageTile(player, tile)) options.push({ tile, kind: '暗杠' })
+  }
+  for (const meld of player.melds) {
+    if (meld.kind === '碰' && player.hand.includes(meld.tile) && !isShortageTile(player, meld.tile)) {
+      options.push({ tile: meld.tile, kind: '加杠' })
+    }
+  }
+  return options
+}
+
 export function legalActions(state: HandState, seat: number): RoundAction[] {
   const player = state.players[seat]
   if (state.phase === 'choose-shortage') {
@@ -502,11 +531,13 @@ export function legalActions(state: HandState, seat: number): RoundAction[] {
   }
   if (state.phase === 'discard') {
     if (state.turn !== seat) return []
-    const actions: RoundAction[] = legalDiscards(state, seat).map(
-      tile => ({ type: 'discard', seat, tile }) as RoundAction
-    )
+    const actions: RoundAction[] = []
     // 只有刚摸到牌（含杠后补牌）才能成牌；碰完必须打牌
-    if (state.drawnTile && canWinHand(state, seat)) actions.unshift({ type: 'win', seat })
+    if (state.drawnTile && canWinHand(state, seat)) actions.push({ type: 'win', seat })
+    for (const option of kongOptionsFor(state, seat)) {
+      actions.push({ type: 'kong', seat, tile: option.tile, kind: option.kind })
+    }
+    for (const tile of legalDiscards(state, seat)) actions.push({ type: 'discard', seat, tile })
     return actions
   }
   if (state.phase === 'claim') {
@@ -615,6 +646,43 @@ export function applyAction(state: HandState, action: RoundAction): HandState {
     next.pendingClaims = []
     next.phase = 'draw'
     next.turn = (action.seat + 1) % SEAT_COUNT
+    return next
+  }
+
+  if (action.type === 'kong') {
+    if (next.phase !== 'discard' || next.turn !== action.seat) throw new Error('当前不能杠')
+    const legal = kongOptionsFor(next, action.seat).some(
+      option => option.tile === action.tile && option.kind === action.kind
+    )
+    if (!legal) throw new Error(`不能${action.kind} ${action.tile}`)
+    if (action.kind === '暗杠') {
+      let removed = 0
+      for (let i = player.hand.length - 1; i >= 0 && removed < 4; i -= 1) {
+        if (player.hand[i] === action.tile) {
+          player.hand.splice(i, 1)
+          removed += 1
+        }
+      }
+      player.melds.push({ kind: '暗杠', tile: action.tile })
+    } else {
+      const index = player.hand.indexOf(action.tile)
+      if (index >= 0) player.hand.splice(index, 1)
+      const meld = player.melds.find(item => item.kind === '碰' && item.tile === action.tile)
+      if (meld) meld.kind = '明杠'
+    }
+    const replacement = takeTailTile(next)
+    if (!replacement) {
+      next.phase = 'over'
+      next.result = 'exhausted'
+      next.logs.push('杠后无牌可补，本把流局')
+      return next
+    }
+    player.hand.push(replacement)
+    next.drawnTile = replacement
+    next.afterKong = true
+    next.phase = 'discard'
+    next.turn = action.seat
+    next.logs.push(`${action.seat} 号位${action.kind} ${action.tile}，补摸 ${replacement}`)
     return next
   }
 
@@ -875,6 +943,8 @@ export function chooseAIAction(state: HandState, seat: number): RoundAction | nu
   if (state.phase === 'discard') {
     const win = actions.find(action => action.type === 'win')
     if (win) return win
+    const kong = actions.find(action => action.type === 'kong')
+    if (kong) return kong
     const discards = actions.filter(
       (action): action is Extract<RoundAction, { type: 'discard' }> => action.type === 'discard'
     )

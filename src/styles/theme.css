@@ -74,6 +74,25 @@ body {
   overflow: hidden;
 }
 
+/* 强制横屏：手机竖着拿时，牌桌按「横屏舞台」排版，再把整块舞台转 90° 铺满视口。
+   用户把手机逆时针转过来看就是正的。尺寸由 ResizeDetection 写进 --stage-*。 */
+html.is-forced-landscape,
+html.is-forced-landscape body {
+  height: 100%;
+  overflow: hidden;
+}
+
+html.is-forced-landscape .wide-shell {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: var(--stage-w, 100vh);
+  height: var(--stage-h, 100vw);
+  transform-origin: 0 0;
+  /* 先绕左上角转 90°，再右移一个视口宽，正好铺满竖屏视口 */
+  transform: translateX(var(--stage-x, 100vw)) rotate(90deg);
+}
+
 /* 牌面：象牙色 + 下沿厚度，是整套 UI 的记忆点 */
 .tile-face {
   background-image: linear-gradient(178deg, #fbf6ea 0%, #f0e5cc 62%, #e0d2b3 100%);
@@ -520,9 +539,10 @@ body {
   border: 1px solid rgba(217, 180, 95, 0.34);
   box-shadow: 0 8px 18px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.06);
   backdrop-filter: blur(3px);
-  /* 一排按钮，窄屏也不折行——折了就顶到牌墙上 */
-  flex-wrap: nowrap;
-  max-width: calc(100vw - 24px);
+  /* 按钮多了（成/打/杠）允许换行，锚在 bottom 上，换行只会往上长 */
+  flex-wrap: wrap;
+  justify-content: center;
+  max-width: calc(var(--app-vw, 100vw) - 24px);
 }
 
 .action-dock > * {

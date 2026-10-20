@@ -52,6 +52,8 @@ const TablePage = defineComponent({
     const board = ref<MatchState | null>(null)
     /** 当前这把 */
     const state = ref<HandState | null>(null)
+    /** 自摸成牌后玩家选择「打」，先收起成牌提示 */
+    const declinedWin = ref(false)
     const phase = ref<TablePhase>('idle')
     const dice = ref<{ a: number; b: number } | null>(null)
     const shownDice = ref<{ a: number; b: number }>({ a: 1, b: 1 })
@@ -121,6 +123,7 @@ const TablePage = defineComponent({
     const act = (action: RoundAction, delay = 420 * PACE) => {
       const hand = state.value
       if (!hand) return
+      if (action.type !== 'discard') declinedWin.value = false
       try {
         state.value = applyAction(hand, action)
       } catch {
@@ -194,6 +197,7 @@ const TablePage = defineComponent({
     }
 
     const start = () => {
+      declinedWin.value = false
       roundSummary.value = null
       rollAndDeal()
     }
@@ -231,6 +235,7 @@ const TablePage = defineComponent({
     }
 
     const quit = () => {
+      declinedWin.value = false
       clearTimer()
       clearDeal()
       state.value = null
@@ -339,6 +344,13 @@ const TablePage = defineComponent({
 
     const myActions = computed(() => (state.value && isMyTurn.value ? legalActions(state.value, 0) : []))
     const myClaims = computed(() => myActions.value.filter(action => action.type === 'claim' || action.type === 'pass'))
+    /** 自摸成牌 / 自家可杠（暗杠、加杠） */
+    const myWin = computed(() =>
+      myActions.value.find((action): action is Extract<RoundAction, { type: 'win' }> => action.type === 'win')
+    )
+    const myKongs = computed(() =>
+      myActions.value.filter((action): action is Extract<RoundAction, { type: 'kong' }> => action.type === 'kong')
+    )
 
     const playable = computed(() => {
       const hand = state.value
@@ -798,6 +810,44 @@ const TablePage = defineComponent({
                       }
                       return null
                     })}
+
+                  {/* 自摸成牌 / 自家杠：成、打、杠都收在操作条里 */}
+                  {playing && hand?.phase === 'discard' && isMyTurn.value && (myWin.value || myKongs.value.length > 0) && (
+                    <>
+                      {myWin.value && !declinedWin.value ? (
+                        <>
+                          <button
+                            type="button"
+                            class="tile-face-sm tile-press claim-in rounded-lg px-3 py-1 font-serif text-[13px] text-ink"
+                            onClick={() => act(myWin.value!)}
+                          >
+                            成
+                          </button>
+                          <button
+                            type="button"
+                            class="chip tile-press claim-in rounded-lg px-3 py-1 font-serif text-[12px]"
+                            onClick={() => {
+                              declinedWin.value = true
+                            }}
+                          >
+                            打
+                          </button>
+                        </>
+                      ) : (
+                        myKongs.value.map(action => (
+                          <button
+                            key={`${action.kind}-${action.tile}`}
+                            type="button"
+                            class="chip tile-press claim-in rounded-lg px-2.5 py-1 font-serif text-[12px]"
+                            onClick={() => act(action)}
+                          >
+                            杠{action.tile}
+                          </button>
+                        ))
+                      )}
+                    </>
+                  )}
+
                   {hand && (
                     <span class="whitespace-nowrap pl-1 text-[10px] leading-none text-mist">
                       <span class="text-ivory">{SEAT_NAMES[0]}</span>
