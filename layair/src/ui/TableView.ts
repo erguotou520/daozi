@@ -1604,8 +1604,8 @@ export class TableView {
         width: this.u(38), height: this.u(24), label: '打', fontSize: this.u(10), face: 'chip',
         onClick: () => { this.declinedWin = true; this.render() }
       }))
-      return
     }
+    // 杠和成/打并列
     for (const action of actions) {
       if (action.type !== 'kong') continue
       items.push(makeButton({
@@ -1752,19 +1752,19 @@ export class TableView {
               }
             })
           )
-        } else {
-          for (const action of kongActions) {
-            items.push(
-              makeButton({
-                width: this.u(46),
-                height: this.u(24),
-                label: `杠${action.tile}`,
-                fontSize: this.u(9),
-                face: 'chip',
-                onClick: () => this.act(action)
-              })
-            )
-          }
+        }
+        // 杠和成/打并列：能成牌也不该把杠藏起来
+        for (const action of kongActions) {
+          items.push(
+            makeButton({
+              width: this.u(46),
+              height: this.u(24),
+              label: `杠${action.tile}`,
+              fontSize: this.u(9),
+              face: 'chip',
+              onClick: () => this.act(action)
+            })
+          )
         }
       }
     }
