@@ -16,11 +16,36 @@ const dir = path.join(root, 'release/wxgame')
 const gamePath = path.join(dir, 'game.json')
 const configPath = path.join(dir, 'project.config.json')
 const privatePath = path.join(dir, 'project.private.config.json')
+const adapterPath = path.join(dir, 'weapp-adapter.js')
 const APPID = process.env.WX_APPID || 'wx35973ee7b1494ae8'
 
 if (!fs.existsSync(gamePath)) {
   console.error('找不到 release/wxgame/game.json，请先在 LayaAirIDE 里构建 wxgame')
   process.exit(1)
+}
+
+// LayaAir 3.4.1 的微信适配库会调用 wx.getGPU()；部分机型上该调用会让
+// 小游戏在真机启动时直接失败。3.4.2 已修复；3.4.1 的产物在这里兜底去掉调用。
+if (fs.existsSync(adapterPath)) {
+  const adapter = fs.readFileSync(adapterPath, 'utf8')
+  const fixed = adapter.replace(
+    /var webgpu = typeof wx\.getGPU === 'function' \? wx\.getGPU\(\) : null;/,
+    "var webgpu = null; // LayaAir 3.4.1: wx.getGPU() crashes some phones"
+  )
+  if (fixed === adapter) {
+    if (adapter.includes('var webgpu = null; // LayaAir 3.4.1')) {
+      console.log('wxgame: weapp-adapter.js already patched (wx.getGPU)')
+    } else {
+      console.warn('wxgame: weapp-adapter.js 未找到 wx.getGPU() 调用，跳过适配补丁')
+    }
+  } else {
+    fs.writeFileSync(adapterPath, fixed)
+    console.log('wxgame: patched weapp-adapter.js (wx.getGPU)')
+  }
+  const patched = fs.readFileSync(adapterPath, 'utf8')
+  if (patched.includes('? wx.getGPU()')) {
+    throw new Error('weapp-adapter.js 仍有 wx.getGPU() 调用，真机可能启动失败')
+  }
 }
 
 const game = JSON.parse(fs.readFileSync(gamePath, 'utf8'))

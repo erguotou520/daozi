@@ -147,6 +147,24 @@ pnpm test:gameplay   # 全部玩法，含 LayaAir 与 web 两份逻辑的一致�
 
 `scripts/test-gameplay.ts` 会同时加载 `src/game` 和 `layair/src/game`，同一组固定手牌 / 牌墙跑两遍并比较结果；LayaAir 这份逻辑和页面共用，测试不启动 Laya 引擎。
 
+### LayaAir 3.4.1 微信真机启动失败
+
+LayaAir 3.4.1 生成的 `release/wxgame/weapp-adapter.js` 会调用 `wx.getGPU()`，
+部分 Android / iOS 机型在真机启动时会直接闪退并提示「小游戏在本机上启动失败」。
+3.4.2 已修复；本项目当前仍用 3.4.1，所以每次构建 wxgame 后都必须执行：
+
+```bash
+node scripts/fix-wxgame.mjs
+```
+
+脚本会把这一行改成 `var webgpu = null`，同时继续保证横屏和 AppID。构建后请确认：
+
+```bash
+grep -n "getGPU" release/wxgame/weapp-adapter.js
+```
+
+只应看到注释，不应再有 `? wx.getGPU()` 调用。
+
 ## 调试
 
 - `F`：切换快速模式（AI 思考时间压到 12%）。
