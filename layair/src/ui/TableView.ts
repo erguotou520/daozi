@@ -967,10 +967,11 @@ export class TableView {
     const m = this.m
     const hand = this.hand
     const px = Math.round(m.boardW / 2 - m.panelW / 2)
-    const py = Math.round(m.boardH / 2 - m.panelH / 2)
+    const panelH = m.panelH + this.u(24)
+    const py = Math.round(m.boardH / 2 - panelH / 2)
 
     if (this.phase === 'rolling') {
-      const panel = makePanel(m.panelW, m.panelH, this.u(10), 'rgba(7,28,23,0.62)', 'rgba(217,180,95,0.22)')
+      const panel = makePanel(m.panelW, panelH, this.u(10), 'rgba(7,28,23,0.62)', 'rgba(217,180,95,0.22)')
       panel.pos(px, py)
       this.content.addChild(panel)
       this.content.addChild(
@@ -989,7 +990,7 @@ export class TableView {
 
     if (!hand || hand.phase === 'over') return
 
-    const panel = makePanel(m.panelW, m.panelH, this.u(10), 'rgba(7,28,23,0.62)', 'rgba(217,180,95,0.22)')
+    const panel = makePanel(m.panelW, panelH, this.u(10), 'rgba(7,28,23,0.62)', 'rgba(217,180,95,0.22)')
     panel.pos(px, py)
     this.content.addChild(panel)
 
@@ -1045,6 +1046,17 @@ export class TableView {
         })
       )
     }
+
+    const exit = makeButton({
+      width: this.u(52),
+      height: this.u(20),
+      label: '退出',
+      fontSize: this.u(9),
+      face: 'ghost',
+      onClick: () => this.requestExit()
+    })
+    exit.pos(Math.round(px + (m.panelW - this.u(52)) / 2), Math.round(py + panelH - this.u(23)))
+    this.content.addChild(exit)
   }
 
   /** 左上角：第几局第几把（原来在中央面板里，挪出来让中间更小） */
@@ -1640,6 +1652,17 @@ export class TableView {
       )
     }
 
+    const exit = makeButton({
+      width: this.u(52),
+      height: this.u(18),
+      label: '退出',
+      fontSize: this.u(9),
+      face: 'ghost',
+      onClick: () => this.requestExit()
+    })
+    exit.pos(Math.round(px + (pillW - this.u(52)) / 2), Math.round(py + pillH + this.u(4)))
+    this.content.addChild(exit)
+
     if (hand.threeToOneSeat !== null) {
       this.content.addChild(
         makeText(this.threeToOneLabel(), {
@@ -1931,19 +1954,6 @@ export class TableView {
 
     if (this.is3D()) this.appendDock3DActions(items, hand, myTurn)
     this.renderDockBar(items)
-
-    if (this.phase === 'playing' && hand.phase !== 'over') {
-      const exit = makeButton({
-        width: this.u(48),
-        height: this.u(24),
-        label: '退出',
-        fontSize: this.u(10),
-        face: 'ghost',
-        onClick: () => this.requestExit()
-      })
-      exit.pos(Math.round(m.ringX + m.ringW - this.u(130)), Math.round(m.ringY + this.u(34)))
-      this.content.addChild(exit)
-    }
   }
 
   private renderDockBar(items: Array<Laya.Sprite | Laya.Text>) {
@@ -2455,10 +2465,11 @@ export class TableView {
     const seat = next.threeToOneSeat
     if (seat === null) return
     if (prev && prev.threeToOneSeat === seat) return
+    const alreadyListening = isTenpaiHand(next.players[seat]) ? '，已听牌' : ''
     this.flash(
       seat === 0
-        ? `三打一 · 亮出${next.threeToOneSuit ?? '牌'}，其余手牌不亮`
-        : `三打一 · ${SEAT_NAMES[seat]}亮${next.threeToOneSuit ?? '牌'}`
+        ? `三打一 · 亮出${next.threeToOneSuit ?? '牌'}，其余手牌不亮${alreadyListening}`
+        : `三打一 · ${SEAT_NAMES[seat]}亮${next.threeToOneSuit ?? '牌'}${alreadyListening}`
     )
   }
 
