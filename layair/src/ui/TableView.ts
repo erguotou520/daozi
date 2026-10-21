@@ -605,16 +605,18 @@ export class TableView {
       return
     }
     const m = this.m
-    const rolling = this.phase === 'rolling'
-    // 骰子跟着中央提示面板走：放在面板右上角（不是屏幕右上角，别挡住退出按钮）
-    const size = Math.round(this.u(rolling ? 40 : 22))
-    const gap = Math.round(size * 0.18)
+    const cm = this.centerPanelMetrics()
+    if (!cm.showDice) {
+      this.diceLayer.visible = false
+      return
+    }
+    // 骰子放进中央半透明面板内部，尺寸再缩小一档
+    const size = cm.diceSize
+    const gap = cm.diceGap
     const scale = size / 60
     const totalW = size * 2 + gap
-    const px = m.boardW / 2 - m.panelW / 2
-    const py = m.boardH / 2 - m.panelH / 2
-    const x0 = Math.round(px + m.panelW - totalW - this.u(6))
-    const y = Math.round(py - size - this.u(2))
+    const x0 = Math.round(cm.x + (cm.width - totalW) / 2)
+    const y = Math.round(cm.y + cm.diceY)
     for (let i = 0; i < this.diceViews.length; i += 1) {
       const view = this.diceViews[i]
       view.scale(scale, scale)
@@ -622,7 +624,7 @@ export class TableView {
       view.setValue(i === 0 ? this.shownDice.a : this.shownDice.b)
     }
     this.diceLayer.pos(m.boardX, m.boardY)
-    this.diceLayer.visible = this.phase !== 'idle' && !(this.hand && this.hand.phase === 'over')
+    this.diceLayer.visible = true
   }
 
   /* ------------------------------------------------------------------ *
@@ -958,6 +960,55 @@ export class TableView {
     return settleHand(hand)
   }
 
+  /** 中央提示面板：骰子、状态、轮到谁、退出都放在同一块半透明面板里，高度由内容撑开 */
+  private centerPanelMetrics() {
+    const m = this.m
+    const hand = this.hand
+    const rolling = this.phase === 'rolling'
+    const over = !hand || hand.phase === 'over'
+    const showDice = this.phase !== 'idle' && !over
+    const showStatus = this.phase !== 'idle' && !over
+    const showTurn = !!hand && !over && !rolling
+    const showThree = !!hand && !over && hand.threeToOneSeat !== null
+    const diceSize = this.u(rolling ? 20 : 15)
+    const diceGap = this.u(2)
+    const exitH = this.u(20)
+    const width = m.panelW
+    let y = this.u(7)
+    const diceY = showDice ? y : 0
+    if (showDice) y += diceSize + diceGap
+    const statusY = showStatus ? y : 0
+    if (showStatus) y += this.u(14) + this.u(2)
+    const turnY = showTurn ? y : 0
+    if (showTurn) y += this.u(20) + this.u(2)
+    const threeY = showThree ? y : 0
+    if (showThree) y += this.u(14) + this.u(2)
+    const showExit = this.phase !== 'idle' && !over
+    const exitY = showExit ? y : 0
+    if (showExit) y += exitH + this.u(4)
+    const height = Math.max(this.u(70), y + this.u(3))
+    return {
+      x: Math.round(m.boardW / 2 - width / 2),
+      y: Math.round(m.boardH / 2 - height / 2),
+      width,
+      height,
+      diceSize,
+      diceGap,
+      diceY,
+      statusY,
+      turnY,
+      threeY,
+      exitY,
+      exitH,
+      showDice,
+      showStatus,
+      showTurn,
+      showThree,
+      showExit,
+      rolling
+    }
+  }
+
   /** 中央提示：只留「牌山 / 发牌」和「轮到谁」两行，面板缩到最小 */
   private renderCenter() {
     if (this.is3D()) {
@@ -966,12 +1017,12 @@ export class TableView {
     }
     const m = this.m
     const hand = this.hand
-    const px = Math.round(m.boardW / 2 - m.panelW / 2)
-    const panelH = m.panelH + this.u(24)
-    const py = Math.round(m.boardH / 2 - panelH / 2)
+    const cm = this.centerPanelMetrics()
+    if (!cm.showStatus && !cm.showTurn && !cm.showDice) return
+    const { x: px, y: py, width, height } = cm
 
-    if (this.phase === 'rolling') {
-      const panel = makePanel(m.panelW, panelH, this.u(10), 'rgba(7,28,23,0.62)', 'rgba(217,180,95,0.22)')
+    if (cm.rolling) {
+      const panel = makePanel(width, height, this.u(10), 'rgba(7,28,23,0.62)', 'rgba(217,180,95,0.22)')
       panel.pos(px, py)
       this.content.addChild(panel)
       this.content.addChild(
@@ -979,33 +1030,36 @@ export class TableView {
           size: this.u(13),
           color: COLORS.mist,
           align: 'center',
-          width: m.panelW,
+          width,
           height: this.u(18),
           x: px,
-          y: py + Math.round((m.panelH - this.u(18)) / 2)
+          y: py + cm.statusY
         })
       )
+      this.addCenterExit(cm)
       return
     }
 
     if (!hand || hand.phase === 'over') return
 
-    const panel = makePanel(m.panelW, panelH, this.u(10), 'rgba(7,28,23,0.62)', 'rgba(217,180,95,0.22)')
+    const panel = makePanel(width, height, this.u(10), 'rgba(7,28,23,0.62)', 'rgba(217,180,95,0.22)')
     panel.pos(px, py)
     this.content.addChild(panel)
 
     const status = this.phase === 'dealing' ? `发牌 ${this.dealProgress}/53` : `牌山 ${remainingTiles(hand)}`
-    this.content.addChild(
-      makeText(status, {
-        size: this.u(10),
-        color: COLORS.mist,
-        align: 'center',
-        width: m.panelW,
-        height: this.u(14),
-        x: px,
-        y: py + this.u(7)
-      })
-    )
+    if (cm.showStatus) {
+      this.content.addChild(
+        makeText(status, {
+          size: this.u(10),
+          color: COLORS.mist,
+          align: 'center',
+          width,
+          height: this.u(14),
+          x: px,
+          y: py + cm.statusY
+        })
+      )
+    }
 
     const actor = this.currentActor(hand)
     const turnText =
@@ -1020,46 +1074,52 @@ export class TableView {
             : actor === null
               ? '本把结束'
               : `轮到${SEAT_NAMES[actor]}`
-    this.content.addChild(
-      makeText(turnText, {
-        size: this.u(14),
-        color: COLORS.ivory,
-        font: FONT_SERIF,
-        align: 'center',
-        width: m.panelW,
-        height: this.u(20),
-        x: px,
-        y: py + this.u(21)
-      })
-    )
+    if (cm.showTurn) {
+      this.content.addChild(
+        makeText(turnText, {
+          size: this.u(14),
+          color: COLORS.ivory,
+          font: FONT_SERIF,
+          align: 'center',
+          width,
+          height: this.u(20),
+          x: px,
+          y: py + cm.turnY
+        })
+      )
+    }
 
-    if (hand.threeToOneSeat !== null) {
+    if (cm.showThree) {
       this.content.addChild(
         makeText(this.threeToOneLabel(), {
           size: this.u(10),
           color: COLORS.brass,
           align: 'center',
-          width: m.panelW,
+          width,
           height: this.u(14),
           x: px,
-          y: py + this.u(41)
+          y: py + cm.threeY
         })
       )
     }
 
+    this.addCenterExit(cm)
+  }
+
+  private addCenterExit(cm: ReturnType<TableView['centerPanelMetrics']>) {
+    if (!cm.showExit) return
     const exit = makeButton({
       width: this.u(52),
-      height: this.u(20),
+      height: cm.exitH,
       label: '退出',
       fontSize: this.u(9),
       face: 'ghost',
       onClick: () => this.requestExit()
     })
-    exit.pos(Math.round(px + (m.panelW - this.u(52)) / 2), Math.round(py + panelH - this.u(23)))
+    exit.pos(Math.round(cm.x + (cm.width - this.u(52)) / 2), Math.round(cm.y + cm.exitY))
     this.content.addChild(exit)
   }
 
-  /** 左上角：第几局第几把（原来在中央面板里，挪出来让中间更小） */
   private renderTopHud() {
     if (this.is3D()) return
     const match = this.board
