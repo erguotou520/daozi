@@ -1,5 +1,5 @@
 import { defineComponent, PropType, type CSSProperties } from 'vue'
-import { meldTiles, type Meld, type Tile } from '@/game/score'
+import { meldTiles, parseTile, type Meld, type NumberSuit, type Tile } from '@/game/score'
 import type { PlayerState } from '@/game/game'
 import TileView from './TileView'
 
@@ -152,6 +152,9 @@ export const OpponentSeat = defineComponent({
     active: { type: Boolean, default: false },
     dealer: { type: Boolean, default: false },
     reveal: { type: Boolean, default: false },
+    /** 三打一：缺另一门的那家把「三家缺的那门」翻开，其余手牌不亮 */
+    open: { type: Boolean, default: false },
+    openSuit: { type: String as PropType<NumberSuit | null>, default: null },
     /** 发牌动画中：最后一张带入场动画 */
     dealing: { type: Boolean, default: false }
   },
@@ -165,8 +168,9 @@ export const OpponentSeat = defineComponent({
 
       const hand = (
         <div class={['flex', vertical ? 'flex-col' : 'flex-row']}>
-          {props.tiles.map((tile, index) =>
-            props.reveal ? (
+          {props.tiles.map((tile, index) => {
+            const face = props.reveal || (props.openSuit !== null && parseTile(tile).suit === props.openSuit)
+            return face ? (
               <TileView key={index} tile={tile} size="seat" rotate={rotate} />
             ) : (
               <TileView
@@ -177,7 +181,7 @@ export const OpponentSeat = defineComponent({
                 enter={props.dealing && index === props.tiles.length - 1}
               />
             )
-          )}
+          })}
         </div>
       )
 
@@ -202,8 +206,9 @@ export const OpponentSeat = defineComponent({
                 {props.dealer && <span class="rounded-[2px] bg-brass px-0.5 text-[8px] leading-3 text-ink">东</span>}
               </span>
               <span class="text-brass">{props.points} 点</span>
-              <span class="text-mist">
+              <span class={props.open ? 'text-brass' : 'text-mist'}>
                 {props.player?.shortage ? `缺${props.player.shortage}` : '—'} · {props.tiles.length}
+                {props.open ? ` · 亮${props.openSuit ?? ''}` : ''}
               </span>
             </div>
           ) : (
@@ -211,6 +216,7 @@ export const OpponentSeat = defineComponent({
               <span class="flex items-baseline gap-1">
                 <span class="text-ivory">{props.name}</span>
                 {props.dealer && <span class="rounded-[3px] bg-brass px-1 text-[9px] leading-4 text-ink">东</span>}
+                {props.open && <span class="rounded-[3px] bg-brass px-1 text-[9px] leading-4 text-ink">亮{props.openSuit}</span>}
               </span>
               <span class="text-mist">
                 {props.player?.shortage ? `缺${props.player.shortage}` : '—'}

@@ -11,12 +11,14 @@
 import {
   applyAction,
   chooseAIAction,
+  daLiaoCheWarning,
   forbiddenDiscardsFor,
   legalActions,
   playableDiscards,
   remainingTiles,
   settleHand,
   shortageTiles,
+  threeToOneOf,
   wallVisualOf,
   type HandSettlement,
   type HandState,
@@ -24,7 +26,7 @@ import {
 } from '../game/game'
 import { dealTrace } from '../game/table'
 import { createMatch, endHand, startHand, STARTING_POINTS, type MatchState } from '../game/match'
-import { meldTiles, tileOrder, type Meld, type NumberSuit, type Tile } from '../game/score'
+import { meldTiles, parseTile, tileOrder, type Meld, type NumberSuit, type Tile } from '../game/score'
 import { COLORS, FONT_SERIF, SEAT_NAMES, TILE_RATIO } from './theme'
 import { DiceView, makeButton, makePanel, makeText, makeWallStack, TileView } from './widgets'
 import { Table3D } from './Table3D'
@@ -139,6 +141,8 @@ export class TableView {
   private spinTimer: ReturnType<typeof setInterval> | null = null
   private autoCloseScheduled = false
   private declinedWin = false
+  /** 三打一 / 定缺等临时提示条 */
+  private notice: string | null = null
   /** 3D 手牌的两段式出牌：第一下选中（牌抬起来），第二下才打出 */
   private selectedIndex = -1
   private selectedTile: Tile | null = null
@@ -1020,6 +1024,20 @@ export class TableView {
         y: py + this.u(21)
       })
     )
+
+    if (hand.threeToOneSeat !== null) {
+      this.content.addChild(
+        makeText(this.threeToOneLabel(), {
+          size: this.u(10),
+          color: COLORS.brass,
+          align: 'center',
+          width: m.panelW,
+          height: this.u(14),
+          x: px,
+          y: py + this.u(41)
+        })
+      )
+    }
   }
 
   /** 左上角：第几局第几把（原来在中央面板里，挪出来让中间更小） */
@@ -1049,8 +1067,28 @@ export class TableView {
     const hand = this.hand
     if (!hand) return []
     if (this.phase === 'dealing') return hand.players[seat].hand.slice(0, this.dealtCounts[seat] ?? 0)
-    if (hand.phase === 'over' && hand.winner?.seat === seat) return this.revealTiles(seat)
+    if ((hand.phase === 'over' && hand.winner?.seat === seat) || this.openSeat(seat)) return this.revealTiles(seat)
     return hand.players[seat].hand
+  }
+
+  /** 三打一：三家同缺时，缺另一门的那家把「三家缺的那门」翻开，其余手牌不亮 */
+  private openSeat(seat: number): boolean {
+    const hand = this.hand
+    return !!hand && hand.threeToOneSeat === seat
+  }
+
+  /** 三打一要翻开的花色（三家共同缺的那门） */
+  private openSuit(): NumberSuit | null {
+    const hand = this.hand
+    return hand ? hand.threeToOneSuit : null
+  }
+
+  /** 「三打一 · 下家亮万」 */
+  private threeToOneLabel(): string {
+    const hand = this.hand
+    if (!hand || hand.threeToOneSeat === null) return ''
+    const who = hand.threeToOneSeat === 0 ? '你' : SEAT_NAMES[hand.threeToOneSeat]
+    return `三打一 · ${who}亮${hand.threeToOneSuit ?? '牌'}`
   }
 
   private revealTiles(seat: number): Tile[] {
@@ -1105,12 +1143,14 @@ export class TableView {
     x: number,
     y: number,
     width: number,
-    align: 'left' | 'center'
+    align: 'left' | 'center',
+    open = false
   ): number {
     const nameSize = this.u(10)
     const restSize = this.u(9)
     const nameW = Math.max(this.u(26), this.measureText(name, nameSize))
-    const restStr = `${shortage ? `缺${shortage}` : '—'} · ${points}点 · ${count}张`
+    const openSuit = open ? this.openSuit() : null
+    const restStr = `${shortage ? `缺${shortage}` : '—'}${openSuit ? ` · 亮${openSuit}` : ''} · ${points}点 · ${count}张`
     const restW = this.measureText(restStr, restSize)
     const badgeW = dealer ? this.u(15) : 0
     const total = nameW + this.u(4) + badgeW + restW
@@ -1166,7 +1206,8 @@ export class TableView {
     count: number,
     x: number,
     y: number,
-    width: number
+    width: number,
+    open = false
   ) {
     const line = (content: string, size: number, color: string, offset: number, bold = false) => {
       this.content.addChild(
@@ -1205,7 +1246,14 @@ export class TableView {
     }
     line(`${points}点`, size, COLORS.brass, offset)
     offset += this.u(12)
-    line(shortage ? `缺${shortage}` : '—', this.u(8), COLORS.mist, offset)
+    const openSuit = open ? this.openSuit() : null
+    const shortText = `${shortage ? `缺${shortage}` : '—'}${openSuit ? `·亮${openSuit}` : ''}`
+    // 侧家信息条很窄，「缺筒·亮条」可能比牌宽还长：按实际宽度缩一点字号，避免被裁掉
+    const shortSize = this.u(8)
+    const shortWidth = this.measureText(shortText, shortSize)
+    const fittedSize =
+      shortWidth > width ? Math.max(this.u(6), Math.floor((shortSize * width) / Math.max(1, shortWidth))) : shortSize
+    line(shortText, fittedSize, openSuit ? COLORS.brass : COLORS.mist, offset)
     offset += this.u(11)
     line(`${count}张`, this.u(8), COLORS.mist, offset)
   }
@@ -1228,7 +1276,7 @@ export class TableView {
     const x = m.boardW / 2 - blockW / 2
     let y = this.u(4)
 
-    this.seatMeta('对面', dealer, shortage, points, count, x, y, blockW, 'center')
+    this.seatMeta('对面', dealer, shortage, points, count, x, y, blockW, 'center', this.openSeat(2))
     if (this.is3D()) return
     y += this.u(18)
 
@@ -1242,9 +1290,11 @@ export class TableView {
       this.content.addChild(rack)
     }
     let hx = startX + rackW
+    const openSuit = this.openSeat(2) ? this.openSuit() : null
     for (let i = 0; i < tiles.length; i += 1) {
-      const tile = reveal
-        ? new TileView(tiles[i], { width: oppW, marked: i === tiles.length - 1 })
+      const face = reveal || (openSuit !== null && parseTile(tiles[i]).suit === openSuit)
+      const tile = face
+        ? new TileView(tiles[i], { width: oppW, marked: reveal && i === tiles.length - 1 })
         : new TileView('', { width: oppW, back: true })
       tile.pos(Math.round(hx), Math.round(y))
       this.content.addChild(tile)
@@ -1282,12 +1332,24 @@ export class TableView {
         : m.boardW - this.u(4) - blockW
     const y = m.boardH / 2 - blockH / 2
 
-    this.seatMetaVertical(left ? '上家' : '下家', dealer, shortage, points, count, x, y, blockW)
+    this.seatMetaVertical(
+      left ? '上家' : '下家',
+      dealer,
+      shortage,
+      points,
+      count,
+      x,
+      y,
+      blockW,
+      this.openSeat(left ? 3 : 1)
+    )
     if (this.is3D()) return
     let cy = y + infoH
+    const openSuit = this.openSeat(left ? 3 : 1) ? this.openSuit() : null
     for (let i = 0; i < tiles.length; i += 1) {
-      const tile = reveal
-        ? new TileView(tiles[i], { width: m.sideW, rotate, stripAtBottom: true, marked: i === tiles.length - 1 })
+      const face = reveal || (openSuit !== null && parseTile(tiles[i]).suit === openSuit)
+      const tile = face
+        ? new TileView(tiles[i], { width: m.sideW, rotate, stripAtBottom: true, marked: reveal && i === tiles.length - 1 })
         : new TileView('', { width: m.sideW, back: true, rotate, stripAtBottom: true })
       tile.pos(Math.round(x + blockW / 2), Math.round(cy + m.sideW / 2))
       this.content.addChild(tile)
@@ -1520,7 +1582,19 @@ export class TableView {
       )
     }
 
-
+    if (hand.threeToOneSeat !== null) {
+      this.content.addChild(
+        makeText(this.threeToOneLabel(), {
+          size: this.u(9),
+          color: COLORS.brass,
+          align: 'left',
+          width: pillW,
+          height: this.u(14),
+          x: px,
+          y: py - this.u(14)
+        })
+      )
+    }
   }
 
   /**
@@ -1648,8 +1722,8 @@ export class TableView {
 
     items.push(
       makeText(
-        `自己${hand.dealerSeat === 0 ? ' 东' : ''}${me.shortage ? `  缺${me.shortage}` : ''}  ${playing ? this.seatPoints(0) : STARTING_POINTS}点  ${this.phase === 'dealing' ? this.dealtCounts[0] : me.hand.length}张`,
-        { size: this.u(10), color: COLORS.mist, width: this.u(165), height: this.u(16) }
+        `自己${hand.dealerSeat === 0 ? ' 东' : ''}${me.shortage ? `  缺${me.shortage}` : ''}${hand.threeToOneSeat === 0 && hand.threeToOneSuit ? `  亮${hand.threeToOneSuit}` : ''}  ${playing ? this.seatPoints(0) : STARTING_POINTS}点  ${this.phase === 'dealing' ? this.dealtCounts[0] : me.hand.length}张`,
+        { size: this.u(10), color: COLORS.mist, width: this.u(185), height: this.u(16) }
       )
     )
 
@@ -1719,6 +1793,10 @@ export class TableView {
           ? `等${SEAT_NAMES[this.currentActor(hand) ?? 0]}抢杠…`
           : `${SEAT_NAMES[this.currentActor(hand) ?? 0]}在出牌…`
       items.push(makeText(status, { size: this.u(10), color: COLORS.mist, width: this.u(180), height: this.u(16) }))
+      const warning = daLiaoCheWarning(hand, 0)
+      if (warning) {
+        items.push(makeText(warning, { size: this.u(9), color: COLORS.vermillion, width: this.u(210), height: this.u(14) }))
+      }
     } else if (this.phase === 'rolling') {
       items.push(makeText('掷骰…', { size: this.u(11), color: COLORS.mist, width: this.u(60), height: this.u(16) }))
     }
@@ -1847,6 +1925,7 @@ export class TableView {
     const result = this.settlement()
     const gameOver = !!result?.gameOver
     const bigWin = !!win?.score.bigWin.isBigWin
+    const kongOpen = !!win?.score.points.items.some(item => item.name === '杠开')
 
     const side3D = this.is3D()
     const panelW = Math.round(
@@ -1883,6 +1962,7 @@ export class TableView {
     // 面板高度按内容算，避免一大片空白把别人的亮牌挡住
     let used = 8 + 14 + 28 + 46 + 38 + 6
     if (bigWin) used += 14
+    if (kongOpen) used += 14
     if (gameOver) used += 18
     const dockTop = m.boardH - this.u(6) - m.handH - this.u(32) - this.u(4)
     const maxH = m.landscape ? Math.max(220, dockTop - m.ringY - this.u(6)) : m.ringH * 0.92
@@ -1940,9 +2020,9 @@ export class TableView {
         y: y + this.u(3)
       })
     )
-    // 大拿 / 清水 徽标跟在「自摸 / 接牌」右侧，红色底保留
+    // 大拿 / 清水 / 杠后赛花徽标跟在「自摸 / 接牌」右侧
+    let badgeX = px + this.u(70) + this.u(40) + this.u(4)
     if (bigWin) {
-      let badgeX = px + this.u(70) + this.u(40) + this.u(4)
       const badge = this.makeBadge('大拿', COLORS.vermillion, COLORS.ivory)
       badge.pos(badgeX, y + this.u(1))
       this.content.addChild(badge)
@@ -1951,7 +2031,13 @@ export class TableView {
         const qing = this.makeBadge('清水', COLORS.brass, COLORS.ink)
         qing.pos(badgeX, y + this.u(1))
         this.content.addChild(qing)
+        badgeX += qing.width + this.u(4)
       }
+    }
+    if (kongOpen) {
+      const kong = this.makeBadge('杠后赛花', COLORS.brass, COLORS.ink)
+      kong.pos(badgeX, y + this.u(1))
+      this.content.addChild(kong)
     }
     this.content.addChild(
       makeText(`${win.score.points.total}`, {
@@ -2297,9 +2383,31 @@ export class TableView {
     Laya.timer.once(delay, this, callback)
   }
 
+  /** 临时提示条：显示 2.6 秒后自动收掉 */
+  private flash(text: string) {
+    this.notice = text
+    this.schedule(2600, () => {
+      this.notice = null
+      this.render()
+    })
+  }
+
+  /** 定缺刚落定时，若形成三打一就提示「谁翻牌」 */
+  private announceThreeToOne(prev: HandState | null, next: HandState) {
+    const seat = next.threeToOneSeat
+    if (seat === null) return
+    if (prev && prev.threeToOneSeat === seat) return
+    this.flash(
+      seat === 0
+        ? `三打一 · 亮出${next.threeToOneSuit ?? '牌'}，其余手牌不亮`
+        : `三打一 · ${SEAT_NAMES[seat]}亮${next.threeToOneSuit ?? '牌'}`
+    )
+  }
+
   private clearTimers() {
     Laya.timer.clearAll(this)
     this.stopSpin()
+    this.notice = null
   }
 
   private stopSpin() {
@@ -2312,6 +2420,7 @@ export class TableView {
   start() {
     this.clearTimers()
     this.declinedWin = false
+    this.notice = null
     this.showStats = false
     this.showExit = false
     this.roundSummary = null
@@ -2322,6 +2431,7 @@ export class TableView {
     this.clearTimers()
     this.stopSpin()
     this.declinedWin = false
+    this.notice = null
     this.phase = 'rolling'
     this.autoCloseScheduled = false
     this.dice = null
@@ -2415,6 +2525,7 @@ export class TableView {
       }
       if (changed) {
         this.hand = current
+        this.announceThreeToOne(hand, current)
         this.persist()
         this.render()
         this.schedule(240 * this.pace(), () => this.tick())
@@ -2443,12 +2554,15 @@ export class TableView {
     if (action.type !== 'discard') this.declinedWin = false
     this.selectedIndex = -1
     this.selectedTile = null
+    let next: HandState
     try {
-      this.hand = applyAction(hand, action)
+      next = applyAction(hand, action)
     } catch (error) {
       console.error('act failed', JSON.stringify(action), error)
       return
     }
+    this.hand = next
+    this.announceThreeToOne(hand, next)
     this.persist()
     this.render()
     this.schedule(delay * this.pace(), () => this.tick())
@@ -2492,6 +2606,12 @@ export class TableView {
     if (!saved.board) return
     this.board = saved.board
     const hand = saved.hand ?? saved.board.current ?? null
+    if (hand) {
+      // 旧存档没有三打一标记：按缺门补算一次，读档后也照样只翻开三家缺的那门
+      const info = hand.threeToOneSeat == null || hand.threeToOneSuit == null ? threeToOneOf(hand) : null
+      hand.threeToOneSeat = hand.threeToOneSeat ?? info?.seat ?? null
+      hand.threeToOneSuit = hand.threeToOneSuit ?? info?.suit ?? null
+    }
     if (saved.roundSummary) {
       this.roundSummary = saved.roundSummary
       this.hand = saved.hand ?? null
@@ -2597,8 +2717,31 @@ export class TableView {
   }
 
   private renderOverlays() {
+    this.renderNotice()
     if (this.showStats) this.renderStatsPanel()
     if (this.showExit) this.renderExitPanel()
+  }
+
+  /** 顶部临时提示（三打一翻牌等），压在其他弹窗下面 */
+  private renderNotice() {
+    if (!this.notice) return
+    const m = this.m
+    const w = Math.min(m.W * 0.72, this.u(320))
+    const h = this.u(30)
+    const panel = makePanel(w, h, this.u(15), 'rgba(9,34,27,0.94)', 'rgba(217,180,95,0.8)', 1.5)
+    panel.pos(Math.round((m.W - w) / 2), this.u(12))
+    panel.mouseEnabled = false
+    panel.addChild(
+      makeText(this.notice, {
+        size: this.u(12),
+        color: COLORS.ivory,
+        align: 'center',
+        valign: 'middle',
+        width: w,
+        height: h
+      })
+    )
+    this.overlay.addChild(panel)
   }
 
   private overlayDim(): Laya.Sprite {

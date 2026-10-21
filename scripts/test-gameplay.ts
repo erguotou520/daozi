@@ -25,6 +25,7 @@ import {
   applyAction,
   chooseAIAction,
   createHand,
+  daLiaoCheWarning,
   forbiddenDiscardsFor,
   isDaLiaoChe,
   kongOptionsFor,
@@ -490,6 +491,15 @@ section('4. 大拿牌型：清一色、双通、双棒棒、双四活、一一�
     opponentsPoints: [10, 10, 10]
   })
   check('成牌点数 ≥ 三家剩余 → 一把吸光', zeroed.bigWin.reasons.some(r => r.name === '一把吸光三家点数'), true)
+  const zeroBase = {
+    concealed: [...suitTiles('筒'), '2条', '3条', '4条', '5条', '5条'],
+    selfDraw: true
+  }
+  const exactly = scoreBoth('吸光三家：刚好够', { ...zeroBase, opponentsPoints: [10, 10, 62] })
+  check('一遍成牌刚好等于最大剩余点数 → 仍算吸光', exactly.bigWin.reasons.some(r => r.name === '一把吸光三家点数'), true)
+  const notEnough = scoreBoth('吸光三家：差一点', { ...zeroBase, opponentsPoints: [10, 10, 63] })
+  check('成牌点数小于最大剩余点数 → 不误判吸光', notEnough.bigWin.reasons.some(r => r.name === '一把吸光三家点数'), false)
+  check('吸光三家按大拿 40 元/家计算', exactly.money.bigWinMoneyPerOpponent, 40)
 
   // 七对本身不是大拿，七对 + 四活才是
   const seven = scoreHand({ concealed: ['1筒', '1筒', '5筒', '5筒', '2条', '2条', '8条', '8条', '3万', '3万', '7万', '7万', '东', '东'] })
@@ -619,16 +629,20 @@ section('7. 大吊车禁打')
 section('8. 对局状态机：缺门、接牌优先级、碰杠、暗杠、加杠、抢杠')
 
 {
-  // 三打一：三家缺同一门，缺另一门的那家从定缺结束起翻牌明打
+  // 三打一：三家缺同一门，缺另一门的那家只把「三家缺的那门」翻开
   const odd = ready(baseHands(), basePiles(), ['万', '条', '条', '条'])
-  check('三打一：三家同缺条 → 缺万的一家明牌', odd.threeToOneSeat, 0)
-  check('三打一：日志记录翻牌明打', odd.logs.some(line => line.includes('三打一')), true)
+  check('三打一：三家同缺条 → 缺万的一家是明牌家', odd.threeToOneSeat, 0)
+  check('三打一：翻开的是三家缺的条，不是自己缺的万', `${odd.threeToOneSuit}/${odd.players[0].shortage}`, '条/万')
+  check('三打一：日志记录翻牌', odd.logs.some(line => line.includes('三打一')), true)
   const twoTwo = ready(baseHands(), basePiles(), ['万', '万', '条', '条'])
   check('三打一：2:2 不触发', twoTwo.threeToOneSeat, null)
+  check('三打一：2:2 没有翻开门', twoTwo.threeToOneSuit, null)
   const allSame = ready(baseHands(), basePiles(), ['筒', '筒', '筒', '筒'])
   check('三打一：四家同缺不触发', allSame.threeToOneSeat, null)
+  check('三打一：四家同缺没有翻开门', allSame.threeToOneSuit, null)
   const oddOther = ready(baseHands(), basePiles(), ['条', '条', '条', '万'])
   check('三打一：明牌家随座位变化', oddOther.threeToOneSeat, 3)
+  check('三打一：翻开门随三家缺门变化', oddOther.threeToOneSuit, '条')
 
   // 明牌家成牌：+5 点 + 1 小摸子
   let oddWin = ready(baseHands(), basePiles(), ['万', '条', '条', '条'])
@@ -815,6 +829,8 @@ section('9. 牌墙、流局、结算、AI')
   banState = applyAction(banState, { type: 'discard', seat: 1, tile: '5万' })
   check('大吊车：打出后生成禁打范围', banState.bans.length, 1)
   check('大吊车：5 万禁 3~7 万', forbiddenDiscardsFor(banState, 2).join(','), '3万,4万,5万,6万,7万')
+  check('大吊车：禁打警告文案', daLiaoCheWarning(banState, 2), '大吊车禁打：3万、4万、5万、6万、7万（打出算点炮）')
+  check('大吊车：无禁打时不显示警告', daLiaoCheWarning(banState, 1), null)
   const safeState: HandState = {
     ...banState,
     players: banState.players.map(player => ({ ...player, hand: [...player.hand] }))
@@ -841,6 +857,8 @@ section('9. 牌墙、流局、结算、AI')
   check('结算：赢家是接牌者', settlement?.winnerSeat, 1)
   check('结算：金额四家合计为 0', sum(settlement?.moneyDelta ?? []), 0)
   check('结算：点数四家合计为 0', sum(settlement?.pointDelta ?? []), 0)
+  check('结算：吸光三家时三家各扣 10 点', `${settlement?.pointDelta[0]},${settlement?.pointDelta[2]},${settlement?.pointDelta[3]}`, '-10,-10,-10')
+  check('结算：吸光三家时赢家得 30 点', settlement?.pointDelta[1], 30)
 
   // AI：接牌时会选碰
   let aiClaim = ready(baseHands(), basePiles(), ['条', '万', '万', '万'])
@@ -897,6 +915,7 @@ section('10. LayaAir 移植一致性与牌墙')
     })
   check('LayaAir 与 web 开局状态一致', summary(web), summary(laya as HandState))
   check('LayaAir 与 web 三打一标记一致', laya.threeToOneSeat, web.threeToOneSeat)
+  check('LayaAir 与 web 翻开门一致', laya.threeToOneSuit, web.threeToOneSuit)
   web = applyAction(web, { type: 'draw', seat: 0 })
   laya = layaApplyAction(laya, { type: 'draw', seat: 0 })
   check('LayaAir 与 web 摸牌状态一致', summary(web), summary(laya as HandState))

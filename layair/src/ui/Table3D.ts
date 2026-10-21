@@ -1,7 +1,7 @@
 import type { HandState } from '../game/game'
-import type { Tile } from '../game/score'
+import type { NumberSuit, Tile } from '../game/score'
 import { wallVisualOf } from '../game/game'
-import { meldTiles, tileOrder } from '../game/score'
+import { meldTiles, parseTile, tileOrder } from '../game/score'
 import { COLORS, HONOR_COLOR, SUIT_COLOR } from './theme'
 
 /** 3D 手牌在屏幕上的可点击区域（相对牌桌 2D 根节点） */
@@ -596,7 +596,8 @@ export class Table3D {
     faceUp: boolean,
     drawnIndex = -1,
     selectedIndex = -1,
-    dimTiles?: Set<Tile>
+    dimTiles?: Set<Tile>,
+    openSuit: NumberSuit | null = null
   ) {
     if (!tiles.length) return
     // 牌与牌留 2 的缝：不留缝时一排牌会糊成一条，看不出几张
@@ -604,6 +605,8 @@ export class Table3D {
     const startX = -((tiles.length - 1) * step) / 2
     for (let i = 0; i < tiles.length; i += 1) {
       const tile = tiles[i]
+      // 三打一：只把三家缺的那门翻开，其余手牌仍扣着
+      const face = seat === 0 || faceUp || (openSuit !== null && parseTile(tile).suit === openSuit)
       if (seat === 0) {
         // 刚摸到的牌只往右让一点，底部仍和手牌齐平（原先整只抬高 8，看着像往后缩）
         const x = startX + i * step + (i === drawnIndex ? 7 : 0)
@@ -611,11 +614,11 @@ export class Table3D {
         const picked = i === selectedIndex
         const y = TILE_H / 2 + 2 + (picked ? 18 : 0)
         const z = HAND_Z_SELF + (picked ? 10 : 0)
-        this.addStandingTile(tile, x, y, z, faceUp, this.dynamicRoot, 0, !!dimTiles?.has(tile))
+        this.addStandingTile(tile, x, y, z, face, this.dynamicRoot, 0, !!dimTiles?.has(tile))
         this.recordSelfHit(tile, i, x, y, z, i === drawnIndex)
       } else if (seat === 2) {
         const x = startX + i * step
-        this.addStandingTile(tile, x, TILE_H / 2 + 2, HAND_Z_OPP, faceUp, this.dynamicRoot, faceUp ? 0 : 180)
+        this.addStandingTile(tile, x, TILE_H / 2 + 2, HAND_Z_OPP, face, this.dynamicRoot, face ? 0 : 180)
       } else {
         const z = startX + i * step
         const x = seat === 3 ? -HAND_X_SIDE : HAND_X_SIDE
@@ -623,8 +626,8 @@ export class Table3D {
         //   左家（x 负）白面朝 -x → 扣着时整组转 -90，牌背朝 +x（相机这一侧）；
         //   右家（x 正）白面朝 +x → 扣着时整组转 +90，牌背朝 -x。
         // 亮牌时反过来，让白面转向相机。
-        const rot = seat === 3 ? (faceUp ? 90 : -90) : faceUp ? -90 : 90
-        this.addStandingTile(tile, x, TILE_H / 2 + 2, z, faceUp, this.dynamicRoot, rot)
+        const rot = seat === 3 ? (face ? 90 : -90) : face ? -90 : 90
+        this.addStandingTile(tile, x, TILE_H / 2 + 2, z, face, this.dynamicRoot, rot)
       }
     }
   }
@@ -853,13 +856,15 @@ export class Table3D {
       if (seat === 0) {
         this.addSeatHand(0, selfTiles, true, selfTiles.length - 1, selfView?.selectedIndex ?? -1, selfView?.dimTiles)
       } else {
+        // 三打一：明牌家只翻开三家缺的那门，其余手牌仍扣着
+        const openSuit = hand.threeToOneSeat === seat ? hand.threeToOneSuit : null
         const reveal = hand.phase === 'over' && winner === seat
-        const tiles = reveal
+        const tiles = reveal || openSuit
           ? [...player.hand].sort(tileOrder)
           : dealing
             ? player.hand.slice(0, dealtCounts?.[seat] ?? 0)
             : player.hand
-        this.addSeatHand(seat, tiles, reveal)
+        this.addSeatHand(seat, tiles, reveal, -1, -1, undefined, openSuit)
       }
       this.addMelds(seat, player)
       this.addDiscards(seat, player.discards)

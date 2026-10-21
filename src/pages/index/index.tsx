@@ -3,6 +3,7 @@ import { useTitle } from '@/hooks'
 import {
   applyAction,
   chooseAIAction,
+  daLiaoCheWarning,
   forbiddenDiscardsFor,
   legalActions,
   playableDiscards,
@@ -361,6 +362,10 @@ const TablePage = defineComponent({
       const hand = state.value
       return new Set(hand ? forbiddenDiscardsFor(hand, 0) : [])
     })
+    const banWarning = computed(() => {
+      const hand = state.value
+      return hand && hand.phase !== 'over' ? daLiaoCheWarning(hand, 0) : null
+    })
 
     /** 手里还有缺门牌时，只有缺门牌能打——这些牌要高亮 */
     const mustPlayShortage = computed(() => {
@@ -409,7 +414,7 @@ const TablePage = defineComponent({
       const hand = state.value
       if (!hand) return []
       if (phase.value === 'dealing') return hand.players[seat].hand.slice(0, dealtCounts.value[seat] ?? 0)
-      if (hand.phase === 'over' && hand.winner?.seat === seat) return revealTiles(seat)
+      if ((hand.phase === 'over' && hand.winner?.seat === seat) || hand.threeToOneSeat === seat) return revealTiles(seat)
       return hand.players[seat].hand
     }
 
@@ -590,6 +595,19 @@ const TablePage = defineComponent({
                     </div>
                   )}
 
+                  {playing && hand?.threeToOneSeat != null && !isOver && (
+                    <div class="text-[11px] leading-4 text-brass">
+                      三打一 · {hand.threeToOneSeat === 0 ? '你' : SEAT_NAMES[hand.threeToOneSeat]}亮
+                      {hand.threeToOneSuit ?? '牌'}
+                    </div>
+                  )}
+
+                  {playing && !isOver && banWarning.value && (
+                    <div class="max-w-[calc(var(--ring-h)*0.62)] break-words text-[10px] leading-4 text-vermillion">
+                      {banWarning.value}
+                    </div>
+                  )}
+
                   {playing && hand?.lastPlayed && (
                     <div class="flex items-center gap-1 text-[11px] leading-none text-mist">
                       <span>刚打</span>
@@ -728,6 +746,9 @@ const TablePage = defineComponent({
                           {hand!.isFirstHand && win.score.bigWin.isBigWin && (
                             <span class="rounded-[3px] bg-brass px-1.5 text-[11px] leading-5 text-ink">清水</span>
                           )}
+                          {win.score.points.items.some(item => item.name === '杠开') && (
+                            <span class="rounded-[3px] bg-brass px-1.5 text-[11px] leading-5 text-ink">杠后赛花</span>
+                          )}
                           {result?.gameOver && (
                             <span class="ml-auto text-[12px] text-brass">
                               {win.score.money.perOpponentTotal} 元/家 · 合计 {win.score.money.total} 元
@@ -780,6 +801,8 @@ const TablePage = defineComponent({
                   active={playing && actor === 2}
                   dealer={hand?.dealerSeat === 2}
                   reveal={isOver && winnerSeat === 2}
+                  open={hand?.threeToOneSeat === 2}
+                  openSuit={hand?.threeToOneSeat === 2 ? hand.threeToOneSuit : null}
                   dealing={phase.value === 'dealing'}
                 />
               </div>
@@ -795,6 +818,8 @@ const TablePage = defineComponent({
                   active={playing && actor === 3}
                   dealer={hand?.dealerSeat === 3}
                   reveal={isOver && winnerSeat === 3}
+                  open={hand?.threeToOneSeat === 3}
+                  openSuit={hand?.threeToOneSeat === 3 ? hand.threeToOneSuit : null}
                   dealing={phase.value === 'dealing'}
                 />
               </div>
@@ -810,6 +835,8 @@ const TablePage = defineComponent({
                   active={playing && actor === 1}
                   dealer={hand?.dealerSeat === 1}
                   reveal={isOver && winnerSeat === 1}
+                  open={hand?.threeToOneSeat === 1}
+                  openSuit={hand?.threeToOneSeat === 1 ? hand.threeToOneSuit : null}
                   dealing={phase.value === 'dealing'}
                 />
               </div>
@@ -882,6 +909,9 @@ const TablePage = defineComponent({
                         <span class="ml-1 rounded-[3px] bg-brass px-1 text-[9px] leading-4 text-ink">东</span>
                       )}
                       {self?.shortage && <span class="ml-1.5">缺{self.shortage}</span>}
+                      {hand.threeToOneSeat === 0 && hand.threeToOneSuit && (
+                        <span class="ml-1.5 text-brass">亮{hand.threeToOneSuit}</span>
+                      )}
                       <span class="ml-1.5 text-brass">{playing ? seatPoints(0) : STARTING_POINTS} 点</span>
                       <span class="ml-1.5">
                         {phase.value === 'dealing' ? dealtCounts.value[0] : (self?.hand.length ?? 0)} 张
