@@ -933,6 +933,7 @@ export class TableView {
   private currentActor(hand: HandState): number | null {
     if (hand.phase === 'over') return null
     if (hand.phase === 'claim') return hand.pendingClaims[0] ?? null
+    if (hand.phase === 'rob-kong') return hand.robKong?.pending[0] ?? null
     return hand.turn
   }
 
@@ -1319,8 +1320,10 @@ export class TableView {
       group.pos(Math.round(x), 1)
       rack.addChild(group)
       const tiles = meldTiles(melds[g])
+      const dark = melds[g].kind === '暗杠'
       for (let i = 0; i < tiles.length; i += 1) {
-        const tile = new TileView(tiles[i], { width: tileW, flat: true })
+        const hidden = dark && i === tiles.length - 1
+        const tile = new TileView(hidden ? '' : tiles[i], { width: tileW, flat: true, back: hidden })
         tile.pos(1 + i * (tileW + meldGap), 2)
         group.addChild(tile)
       }
@@ -1345,8 +1348,10 @@ export class TableView {
       group.pos(1, Math.round(y))
       rack.addChild(group)
       const tiles = meldTiles(melds[g])
+      const dark = melds[g].kind === '暗杠'
       for (let i = 0; i < tiles.length; i += 1) {
-        const tile = new TileView(tiles[i], { width: tileW, rotate, flat: true })
+        const hidden = dark && i === tiles.length - 1
+        const tile = new TileView(hidden ? '' : tiles[i], { width: tileW, rotate, flat: true, back: hidden })
         tile.pos(tileH / 2 + 1, 1 + i * (tileW + meldGap) + tileW / 2)
         group.addChild(tile)
       }
@@ -1475,9 +1480,11 @@ export class TableView {
       ? `发牌 ${this.dealProgress}/53`
       : hand.phase === 'choose-shortage'
         ? hand.players[0].shortage ? '等别家定缺' : '选缺门'
-        : this.isMyTurn(hand)
-          ? '轮到你'
-          : actor === null ? '本把结束' : `轮到${SEAT_NAMES[actor]}`
+        : hand.phase === 'rob-kong'
+          ? this.isMyTurn(hand) ? '可以抢杠：选 成 或 过' : `等${SEAT_NAMES[actor ?? 0]}抢杠`
+          : this.isMyTurn(hand)
+            ? '轮到你'
+            : actor === null ? '本把结束' : `轮到${SEAT_NAMES[actor]}`
     const round = match ? `第${match.roundIndex}局·第${match.hands + 1}把` : '本局'
     const text = `${round}  ·  牌山 ${remainingTiles(hand)}  ·  ${status}`
     const pillW = Math.round(Math.min(m.boardW * 0.42, this.u(280)))
@@ -1574,7 +1581,7 @@ export class TableView {
   private appendDock3DActions(items: Array<Laya.Sprite | Laya.Text>, hand: HandState, myTurn: boolean) {
     if (this.phase !== 'playing' || hand.phase === 'over' || !myTurn) return
     const actions = legalActions(hand, 0)
-    if (hand.phase === 'claim') {
+    if (hand.phase === 'claim' || hand.phase === 'rob-kong') {
       for (const action of actions) {
         if (action.type === 'pass') {
           items.push(makeButton({
@@ -1699,14 +1706,18 @@ export class TableView {
       const hasWin = myActions.some(action => action.type === 'win') && !this.declinedWin
       const hasKong = myActions.some(action => action.type === 'kong')
       const status = myTurn
-        ? hasWin
-          ? '可以成牌：选 成 或 打'
-          : hasKong
-            ? '可以杠，或点手牌打出'
-            : shortageTiles(me).length
-              ? '必须打缺门牌'
-              : '点手牌打出'
-        : `${SEAT_NAMES[this.currentActor(hand) ?? 0]}在出牌…`
+        ? hand.phase === 'rob-kong'
+          ? '可以抢杠：选 成 或 过'
+          : hasWin
+            ? '可以成牌：选 成 或 打'
+            : hasKong
+              ? '可以杠，或点手牌打出'
+              : shortageTiles(me).length
+                ? '必须打缺门牌'
+                : '点手牌打出'
+        : hand.phase === 'rob-kong'
+          ? `等${SEAT_NAMES[this.currentActor(hand) ?? 0]}抢杠…`
+          : `${SEAT_NAMES[this.currentActor(hand) ?? 0]}在出牌…`
       items.push(makeText(status, { size: this.u(10), color: COLORS.mist, width: this.u(180), height: this.u(16) }))
     } else if (this.phase === 'rolling') {
       items.push(makeText('掷骰…', { size: this.u(11), color: COLORS.mist, width: this.u(60), height: this.u(16) }))
@@ -1715,7 +1726,7 @@ export class TableView {
     // 接牌 / 自摸成牌 / 自家杠：2D 也收进操作条，不再占中央面板
     if (!this.is3D() && this.phase === 'playing' && myTurn) {
       const acts = legalActions(hand, 0)
-      if (hand.phase === 'claim') {
+      if (hand.phase === 'claim' || hand.phase === 'rob-kong') {
         for (const action of acts) {
           if (action.type === 'pass') {
             items.push(
@@ -1727,6 +1738,17 @@ export class TableView {
                 width: this.u(38),
                 height: this.u(24),
                 label: action.claim,
+                fontSize: this.u(10),
+                face: 'tile',
+                onClick: () => this.act(action)
+              })
+            )
+          } else if (action.type === 'win') {
+            items.push(
+              makeButton({
+                width: this.u(38),
+                height: this.u(24),
+                label: '成',
                 fontSize: this.u(10),
                 face: 'tile',
                 onClick: () => this.act(action)

@@ -635,7 +635,9 @@ export class Table3D {
     let cursor = 0
     for (const meld of player.melds) {
       const tiles = meldTiles(meld)
-      for (const tile of tiles) {
+      const dark = meld.kind === '暗杠'
+      for (let mi = 0; mi < tiles.length; mi += 1) {
+        const tile = tiles[mi]
         let x = 0
         let z = 0
         if (seat === 0) {
@@ -651,7 +653,12 @@ export class Table3D {
           x = HAND_X_SIDE
           z = -400 - cursor * flatGap
         }
-        this.addFlatTile(tile, x, z, this.dynamicRoot, seat === 3 ? 90 : seat === 1 ? -90 : 0)
+        const rot = seat === 3 ? 90 : seat === 1 ? -90 : 0
+        if (dark && mi === tiles.length - 1) {
+          this.addTileBody(null, x, TILE_T / 2 + 2, z, this.dynamicRoot, 'flatDown', rot)
+        } else {
+          this.addFlatTile(tile, x, z, this.dynamicRoot, rot)
+        }
         cursor += 1
       }
       cursor += 0.5

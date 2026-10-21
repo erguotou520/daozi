@@ -55,16 +55,26 @@ export interface DaLiaoCheBan {
   forbidden: Tile[]
 }
 
-export type Phase = 'choose-shortage' | 'draw' | 'discard' | 'claim' | 'over'
+export type Phase = 'choose-shortage' | 'draw' | 'discard' | 'claim' | 'rob-kong' | 'over'
 
 export type RoundAction =
   | { type: 'chooseShortage'; seat: number; suit: NumberSuit }
   | { type: 'draw'; seat: number }
   | { type: 'discard'; seat: number; tile: Tile }
-  | { type: 'win'; seat: number }
+  | { type: 'win'; seat: number; robKong?: boolean }
   | { type: 'kong'; seat: number; tile: Tile; kind: KongKind }
   | { type: 'claim'; seat: number; claim: ClaimKind }
   | { type: 'pass'; seat: number }
+
+/** 加杠后等待别家抢杠的状态 */
+export interface RobKongState {
+  /** 杠牌的人 */
+  seat: number
+  /** 被加杠的牌 */
+  tile: Tile
+  /** 还能表态的人，按顺序 */
+  pending: number[]
+}
 
 export interface HandState {
   /** 座位号 → 玩家 id */
@@ -88,6 +98,8 @@ export interface HandState {
   lastPlayed: { tile: Tile; seat: number } | null
   /** 待表态的座位，按「成 > 杠 > 碰，再按离打出者的远近」排序 */
   pendingClaims: number[]
+  /** 加杠后被抢杠的等待状态 */
+  robKong: RobKongState | null
   /** 刚摸到的牌 */
   drawnTile: Tile | null
   /** 是否杠后补牌成牌（杠开） */
@@ -273,6 +285,7 @@ export function createHand(options: CreateHandOptions): HandState {
     lastDiscard: null,
     lastPlayed: null,
     pendingClaims: [],
+    robKong: null,
     drawnTile: null,
     afterKong: false,
     isFirstHand: options.isFirstHand ?? false,
@@ -547,6 +560,13 @@ export function legalActions(state: HandState, seat: number): RoundAction[] {
     actions.push({ type: 'pass', seat })
     return actions
   }
+  if (state.phase === 'rob-kong') {
+    if (state.robKong?.pending[0] !== seat) return []
+    return [
+      { type: 'win', seat, robKong: true },
+      { type: 'pass', seat }
+    ]
+  }
   return []
 }
 
@@ -567,6 +587,7 @@ function cloneHand(state: HandState): HandState {
     piles: state.piles.map(pile => [...pile]),
     pileMeta: state.pileMeta.map(entries => entries.map(entry => ({ ...entry }))),
     pendingClaims: [...state.pendingClaims],
+    robKong: state.robKong ? { ...state.robKong, pending: [...state.robKong.pending] } : null,
     bans: state.bans.map(ban => ({ ...ban, forbidden: [...ban.forbidden] })),
     logs: [...state.logs]
   }
@@ -613,6 +634,17 @@ export function applyAction(state: HandState, action: RoundAction): HandState {
   }
 
   if (action.type === 'win') {
+    if (next.phase === 'rob-kong') {
+      const rob = next.robKong
+      if (!rob || action.seat !== rob.pending[0] || !action.robKong) throw new Error('当前不能抢杠')
+      const kongPlayer = next.players[rob.seat]
+      const index = kongPlayer.hand.indexOf(rob.tile)
+      if (index >= 0) kongPlayer.hand.splice(index, 1)
+      const result = resolveWin(next, action.seat, false, rob.tile, rob.seat, false)
+      result.robKong = null
+      result.logs.push(`${action.seat} 号位抢杠 ${rob.tile} 成牌`)
+      return result
+    }
     if (next.phase !== 'discard' || next.turn !== action.seat || !next.drawnTile) {
       throw new Error('当前不能成牌')
     }
@@ -655,6 +687,9 @@ export function applyAction(state: HandState, action: RoundAction): HandState {
       option => option.tile === action.tile && option.kind === action.kind
     )
     if (!legal) throw new Error(`不能${action.kind} ${action.tile}`)
+    if (action.kind === '加杠' && beginRobKong(next, action.seat, action.tile)) {
+      return next
+    }
     if (action.kind === '暗杠') {
       let removed = 0
       for (let i = player.hand.length - 1; i >= 0 && removed < 4; i -= 1) {
@@ -696,6 +731,7 @@ export function applyAction(state: HandState, action: RoundAction): HandState {
   }
 
   if (action.type === 'pass') {
+    if (next.phase === 'rob-kong') return advanceRobKong(next)
     if (next.phase !== 'claim') throw new Error('当前不是接牌阶段')
     return advanceClaim(next)
   }
@@ -782,17 +818,75 @@ function advanceClaim(state: HandState): HandState {
  * 成牌
  * ------------------------------------------------------------------ */
 
+/** 加杠后检查是否有人能抢杠；有则挂起等待表态 */
+function beginRobKong(state: HandState, kongSeat: number, tile: Tile): boolean {
+  const pending: number[] = []
+  for (let step = 1; step < SEAT_COUNT; step += 1) {
+    const seat = (kongSeat + step) % SEAT_COUNT
+    const player = state.players[seat]
+    if (isShortageTile(player, tile)) continue
+    if (isCompleteHand(state, seat, [...player.hand, tile], tile)) pending.push(seat)
+  }
+  if (!pending.length) return false
+  state.robKong = { seat: kongSeat, tile, pending }
+  state.phase = 'rob-kong'
+  state.turn = pending[0]
+  state.pendingClaims = []
+  state.logs.push(`${kongSeat} 号位加杠 ${tile}，等待抢杠`)
+  return true
+}
+
+/** 抢杠全部过掉后，才真正完成加杠并补牌 */
+function finishRobbedKong(state: HandState, kongSeat: number, tile: Tile): HandState {
+  const player = state.players[kongSeat]
+  const index = player.hand.indexOf(tile)
+  if (index >= 0) player.hand.splice(index, 1)
+  const meld = player.melds.find(item => item.kind === '碰' && item.tile === tile)
+  if (meld) meld.kind = '明杠'
+  state.robKong = null
+  state.pendingClaims = []
+
+  const replacement = takeTailTile(state)
+  if (!replacement) {
+    state.phase = 'over'
+    state.result = 'exhausted'
+    state.logs.push('杠后无牌可补，本把流局')
+    return state
+  }
+  player.hand.push(replacement)
+  state.drawnTile = replacement
+  state.afterKong = true
+  state.phase = 'discard'
+  state.turn = kongSeat
+  state.logs.push(`${kongSeat} 号位明杠 ${tile}，补摸 ${replacement}`)
+  return state
+}
+
+function advanceRobKong(state: HandState): HandState {
+  const rob = state.robKong
+  if (!rob) throw new Error('当前没有抢杠')
+  const rest = rob.pending.slice(1)
+  if (rest.length) {
+    rob.pending = rest
+    state.turn = rest[0]
+    state.logs.push(`${rest[0]} 号位继续考虑抢杠`)
+    return state
+  }
+  return finishRobbedKong(state, rob.seat, rob.tile)
+}
+
 function resolveWin(
   state: HandState,
   seat: number,
   selfDraw: boolean,
   winTile: Tile | null,
-  discardSeat: number | null
+  discardSeat: number | null,
+  removeDiscard = true
 ): HandState {
   const player = state.players[seat]
 
   // 先把手上的成牌张 / 被接走的牌从牌河移除，再统计可见张数
-  if (!selfDraw && winTile && discardSeat !== null) {
+  if (removeDiscard && !selfDraw && winTile && discardSeat !== null) {
     const discarder = state.players[discardSeat]
     const index = discarder.discards.lastIndexOf(winTile)
     if (index >= 0) discarder.discards.splice(index, 1)
@@ -930,6 +1024,9 @@ export function chooseAIAction(state: HandState, seat: number): RoundAction | nu
     return { type: 'chooseShortage', seat, suit: best }
   }
   if (state.phase === 'draw') return { type: 'draw', seat }
+  if (state.phase === 'rob-kong') {
+    return actions.find(action => action.type === 'win') ?? { type: 'pass', seat }
+  }
   if (state.phase === 'claim') {
     const win = actions.find(action => action.type === 'claim' && action.claim === '成')
     if (win) return win

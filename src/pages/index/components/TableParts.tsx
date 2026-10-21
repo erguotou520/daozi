@@ -23,9 +23,10 @@ export const MeldRack = defineComponent({
             class={['flex gap-[1px] rounded-[4px] p-[2px]', props.vertical ? 'flex-col' : 'flex-row']}
             style={{ border: '1px solid rgba(217, 180, 95, 0.32)', background: 'rgba(0, 0, 0, 0.2)' }}
           >
-            {meldTiles(meld).map((tile, tileIndex) => (
-              <TileView key={tileIndex} tile={tile} size="meld" rotate={props.rotate} />
-            ))}
+            {meldTiles(meld).map((tile, tileIndex) => {
+              const hidden = meld.kind === '暗杠' && tileIndex === meldTiles(meld).length - 1
+              return <TileView key={tileIndex} tile={hidden ? '' : tile} back={hidden} size="meld" rotate={props.rotate} />
+            })}
           </div>
         ))}
       </div>

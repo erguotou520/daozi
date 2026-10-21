@@ -85,6 +85,7 @@ const TablePage = defineComponent({
     const currentActor = (hand: HandState): number | null => {
       if (hand.phase === 'over') return null
       if (hand.phase === 'claim') return hand.pendingClaims[0] ?? null
+      if (hand.phase === 'rob-kong') return hand.robKong?.pending[0] ?? null
       return hand.turn
     }
 
@@ -342,7 +343,9 @@ const TablePage = defineComponent({
     })
 
     const myActions = computed(() => (state.value && isMyTurn.value ? legalActions(state.value, 0) : []))
-    const myClaims = computed(() => myActions.value.filter(action => action.type === 'claim' || action.type === 'pass'))
+    const myClaims = computed(() =>
+      myActions.value.filter(action => action.type === 'claim' || action.type === 'pass' || (action.type === 'win' && action.robKong))
+    )
     const myWin = computed(() =>
       myActions.value.find((action): action is Extract<RoundAction, { type: 'win' }> => action.type === 'win')
     )
@@ -596,7 +599,7 @@ const TablePage = defineComponent({
                   )}
 
                   {/* 接牌按钮 */}
-                  {playing && hand?.phase === 'claim' && isMyTurn.value && (
+                  {playing && (hand?.phase === 'claim' || hand?.phase === 'rob-kong') && isMyTurn.value && (
                     <div class="mt-0.5 flex flex-wrap justify-center gap-1">
                       {myClaims.value.map(action => {
                         if (action.type === 'pass') {
@@ -620,6 +623,18 @@ const TablePage = defineComponent({
                               onClick={() => act(action)}
                             >
                               {action.claim}
+                            </button>
+                          )
+                        }
+                        if (action.type === 'win' && action.robKong) {
+                          return (
+                            <button
+                              key="rob-kong-win"
+                              type="button"
+                              class="tile-face-sm tile-press claim-in rounded-lg px-3 py-1 font-serif text-[12px] text-ink"
+                              onClick={() => act(action)}
+                            >
+                              成
                             </button>
                           )
                         }
