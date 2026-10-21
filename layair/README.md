@@ -6,6 +6,10 @@
 
 ![2D 牌桌](docs/screenshots/2d-table.png)
 
+成牌结算卡：大拿徽标在「自摸/接牌」右边，牌型明细一行铺开并给出小计，点数和金额都对得上。
+
+![2D 结算](docs/screenshots/2d-settlement.png)
+
 | 横屏 · 3D 牌桌（手机默认） | 横屏 · 3D 结算 |
 | --- | --- |
 | ![3D 牌桌](docs/screenshots/3d-table.png) | ![3D 结算](docs/screenshots/3d-settlement.png) |
