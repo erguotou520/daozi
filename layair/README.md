@@ -131,6 +131,17 @@ layair/
 
 产物只依赖 `laya.core.js`、`laya.webgl_2D.js`、`laya.ui2.js` 等引擎文件和 `js/bundle.js`，没有额外图片 / 图集需要加载。
 
+## 测试
+
+规则层是纯 TypeScript，不依赖 LayaAir 的渲染 / 生命周期，可以直接在仓库根目录跑：
+
+```bash
+pnpm test            # 结算 + 对局状态机 + 全部玩法
+pnpm test:gameplay   # 全部玩法，含 LayaAir 与 web 两份逻辑的一致性
+```
+
+`scripts/test-gameplay.ts` 会同时加载 `src/game` 和 `layair/src/game`，同一组固定手牌 / 牌墙跑两遍并比较结果；LayaAir 这份逻辑和页面共用，测试不启动 Laya 引擎。
+
 ## 调试
 
 - `F`：切换快速模式（AI 思考时间压到 12%）。
