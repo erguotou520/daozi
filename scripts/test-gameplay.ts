@@ -17,6 +17,7 @@ import {
   scoreHand,
   suitTiles,
   type Meld,
+  type NumberSuit,
   type ScoreInput,
   type Tile
 } from '../src/game/score'
@@ -28,6 +29,7 @@ import {
   daLiaoCheWarning,
   forbiddenDiscardsFor,
   isDaLiaoChe,
+  isTenpaiHand,
   kongOptionsFor,
   legalActions,
   legalDiscards,
@@ -35,11 +37,13 @@ import {
   settleHand,
   wallVisualOf,
   type HandState,
+  type PlayerState,
   type RoundAction
 } from '../src/game/game'
 import {
   applyAction as layaApplyAction,
   createHand as layaCreateHand,
+  isTenpaiHand as layaIsTenpaiHand,
   legalActions as layaLegalActions
 } from '../layair/src/game/game'
 
@@ -661,6 +665,53 @@ section('8. 对局状态机：缺门、接牌优先级、碰杠、暗杠、加�
     oddWin.winner?.score.mozi.items.some(item => item.name === '三打一' && item.units === 0.5),
     true
   )
+
+  // 听牌：13 张再进一张能成牌；缺门牌没打完不算
+  const makePlayer = (hand: Tile[], shortage: NumberSuit | null = null, melds: Meld[] = []): PlayerState => ({
+    seat: 0,
+    hand,
+    melds,
+    discards: [],
+    shortage,
+    points: 50,
+    isAI: false
+  })
+  const tenpai13: Tile[] = ['1筒', '2筒', '3筒', '4筒', '5筒', '6筒', '7筒', '8筒', '9筒', '1条', '2条', '3条', '5条']
+  check('听牌：两门 3 组顺子 + 单吊 5 条', isTenpaiHand(makePlayer(tenpai13, '万')), true)
+  check('听牌：缺门牌没打完 → 还没听', isTenpaiHand(makePlayer([...tenpai13, '1万'], '万')), false)
+  check(
+    '听牌：13 张散牌不算听',
+    isTenpaiHand(makePlayer(['1筒', '4筒', '7筒', '1条', '4条', '7条', '1万', '4万', '7万', '东', '南', '西', '北'])),
+    false
+  )
+  check('听牌：14 张打出 9 条后听 5 条', isTenpaiHand(makePlayer([...tenpai13, '9条'], '万')), true)
+  check(
+    '听牌：六对 + 单张等七对',
+    isTenpaiHand(
+      makePlayer(['1筒', '1筒', '2筒', '2筒', '3筒', '3筒', '4筒', '4筒', '5筒', '5筒', '6筒', '6筒', '东'])
+    ),
+    true
+  )
+  check(
+    '听牌：副露 1 组后 10 张单吊也算',
+    isTenpaiHand(makePlayer(['1筒', '2筒', '3筒', '4筒', '5筒', '6筒', '7筒', '8筒', '9筒', '5条'], null, [pung('1万')])),
+    true
+  )
+  check(
+    '听牌：自己已拿满 4 张 5 条 → 不再等第 5 张',
+    isTenpaiHand(
+      makePlayer(['1筒', '2筒', '3筒', '4筒', '5筒', '6筒', '7筒', '8筒', '9筒', '5条', '5条', '5条', '5条'], '万')
+    ),
+    false
+  )
+  check(
+    '听牌：14 张已经成牌也算听',
+    isTenpaiHand(
+      makePlayer(['1筒', '2筒', '3筒', '4筒', '5筒', '6筒', '7筒', '8筒', '9筒', '1条', '2条', '3条', '5条', '5条'], '万')
+    ),
+    true
+  )
+  check('听牌：LayaAir 与 web 一致', layaIsTenpaiHand(makePlayer(tenpai13, '万')), true)
 
   // 缺门：手里有缺门牌必须优先打缺门牌
   const hands = baseHands()

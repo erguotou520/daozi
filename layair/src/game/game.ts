@@ -10,6 +10,7 @@ import {
   HONORS,
   NUMBER_SUITS,
   countsOf,
+  decompose,
   isHonor,
   meldTiles,
   parseTile,
@@ -429,6 +430,56 @@ export function threeToOneOf(state: HandState): { seat: number; suit: NumberSuit
     }
   }
   return null
+}
+
+/** 34 种牌面各一张，听牌判定时枚举进张用 */
+const ALL_TILE_KINDS: Tile[] = [
+  ...NUMBER_SUITS.flatMap(suit => Array.from({ length: 9 }, (_, index) => tileOf(suit, index + 1))),
+  ...HONORS
+]
+
+/** 这手牌（含副露）是否已经成牌：4 组面子 + 1 对将，或七对 */
+function isWinningConcealed(concealed: Tile[], melds: Meld[]): boolean {
+  if (melds.length === 0 && concealed.length === 14) {
+    const counts = [...countsOf(concealed).values()]
+    if (counts.length > 0 && counts.length <= 7 && counts.every(n => n % 2 === 0)) return true
+  }
+  const needSets = 4 - melds.length
+  if (needSets < 0 || concealed.length !== needSets * 3 + 2) return false
+  return decompose(countsOf(concealed)).some(item => item.sets.length === needSets)
+}
+
+/** 当前 13 张（或副露后的等价张数）是否听牌：再进一张就能成牌 */
+function hasWinningTile(player: PlayerState): boolean {
+  const meldTilesAll = player.melds.flatMap(meld => meldTiles(meld))
+  for (const candidate of ALL_TILE_KINDS) {
+    if (player.shortage && parseTile(candidate).suit === player.shortage) continue
+    const own = [...player.hand, ...meldTilesAll].filter(tile => tile === candidate).length
+    if (own >= 4) continue
+    if (isWinningConcealed([...player.hand, candidate], player.melds)) return true
+  }
+  return false
+}
+
+/**
+ * 是否听牌。缺门牌没打完时不算；刚摸完牌（手牌 3n+2）时，
+ * 只要有一种打法能打到听牌，也算听牌，标识不会在摸牌那一巡闪掉。
+ */
+export function isTenpaiHand(player: PlayerState): boolean {
+  if (player.shortage && player.hand.some(tile => parseTile(tile).suit === player.shortage)) return false
+  const rest = player.hand.length % 3
+  if (rest === 1) return hasWinningTile(player)
+  if (rest === 2) {
+    const tried = new Set<Tile>()
+    for (const tile of player.hand) {
+      if (tried.has(tile)) continue
+      tried.add(tile)
+      const next = [...player.hand]
+      next.splice(next.indexOf(tile), 1)
+      if (hasWinningTile({ ...player, hand: next })) return true
+    }
+  }
+  return false
 }
 
 /** 某张牌在别家已公开的张数（打出的 + 副露的） */

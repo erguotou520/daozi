@@ -111,6 +111,7 @@ export class Table3D {
   private faceCache = new Map<string, Laya.Texture2D>()
   private roundedCache = new Map<string, Laya.Mesh>()
   private _highlightMat: Laya.UnlitMaterial | null = null
+  private listenTex: Laya.Texture2D | null = null
   private bodyCache = new Map<string, Laya.BlinnPhongMaterial>()
   private worldW: number
   private worldH: number
@@ -557,6 +558,47 @@ export class Table3D {
     return this.addTileBody(tile, x, TILE_T / 2 + 2, z, parent, 'flatUp', rotationY, highlight)
   }
 
+  /** 「听」标记贴图：象牙底、红框、红字 */
+  private listenFaceTexture(): Laya.Texture2D {
+    if (this.listenTex) return this.listenTex
+    const w = 128
+    const h = 128
+    const hc = new Laya.HTMLCanvas(true)
+    hc.size(w, h)
+    const ctx = hc.context
+    ctx.clearRect(0, 0, w, h)
+    ctx.fillStyle = '#F7EEDA'
+    ctx.fillRect(0, 0, w, h)
+    ctx.strokeStyle = '#B03A26'
+    ctx.lineWidth = 10
+    ctx.strokeRect(7, 7, w - 14, h - 14)
+    ctx.fillStyle = '#B03A26'
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    ctx.font = 'bold 84px "Songti SC", "STSong", serif'
+    ctx.fillText('听', w / 2, h / 2 + 5)
+    const tex = new Laya.Texture2D(w, h, Laya.TextureFormat.R8G8B8A8, false, false, true, false)
+    tex.setImageData(hc.source, false, false)
+    this.listenTex = tex
+    return tex
+  }
+
+  /** 平躺在明牌家手牌前面的红色「听」牌 */
+  private addListenPlaque(seat: number) {
+    const size = 42
+    const gap = 100
+    const x = seat === 3 ? -HAND_X_SIDE + gap : seat === 1 ? HAND_X_SIDE - gap : 0
+    const z = seat === 0 ? HAND_Z_SELF - gap : seat === 2 ? HAND_Z_OPP + gap : 0
+    const group = new Laya.Sprite3D()
+    group.transform.position = new Laya.Vector3(x, TILE_T / 2 + 2, z)
+    this.dynamicRoot.addChild(group)
+    const body = new Laya.Sprite3D()
+    body.transform.rotationEuler = new Laya.Vector3(-90, 0, 0)
+    group.addChild(body)
+    this.addRounded(size, size, 4, 3, this.bodyMaterial(COLORS.ivory), 0, 0, 0, body)
+    this.addRounded(size - 4, size - 4, 1.2, 2, this.faceMaterial(this.listenFaceTexture()), 0, 0, 2.2, body)
+  }
+
   /**
    * 牌墙：一墩就是两张平躺的牌叠在一起，牌背朝上。
    * 和手里的牌是同一个模型：沿桌边 = 牌宽、垂直桌边 = 牌高、每层 = 牌厚。
@@ -829,7 +871,8 @@ export class Table3D {
     wallVisual?: Array<Array<[boolean, boolean]>>,
     dealtCounts?: number[],
     dealing = false,
-    selfView?: { selectedIndex?: number; dimTiles?: Set<Tile> }
+    selfView?: { selectedIndex?: number; dimTiles?: Set<Tile> },
+    tenpaiSeat: number | null = null
   ) {
     this.hand = hand
     this.selfHits = []
@@ -869,6 +912,8 @@ export class Table3D {
       this.addMelds(seat, player)
       this.addDiscards(seat, player.discards)
     }
+
+    if (tenpaiSeat !== null) this.addListenPlaque(tenpaiSeat)
 
     this.buildDice(dice, rolling)
   }

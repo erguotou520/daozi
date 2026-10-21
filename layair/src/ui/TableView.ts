@@ -13,6 +13,7 @@ import {
   chooseAIAction,
   daLiaoCheWarning,
   forbiddenDiscardsFor,
+  isTenpaiHand,
   legalActions,
   playableDiscards,
   remainingTiles,
@@ -44,6 +45,8 @@ import {
 const STACKS = 17
 const PER_LINE = 13
 const SHORTAGE_OPTIONS: NumberSuit[] = ['万', '筒', '条']
+/** 红色「听」标记的边长（设计值，实际会乘 scale） */
+const LISTEN_BADGE = 22
 /** 设计基准：牌桌宽约 375 逻辑像素时 scale = 1 */
 const BASE_BOARD = 375
 
@@ -143,6 +146,8 @@ export class TableView {
   private declinedWin = false
   /** 三打一 / 定缺等临时提示条 */
   private notice: string | null = null
+  /** 三打一的明牌家已经听牌时，记下这家（红色「听」标记） */
+  private tenpaiSeat: number | null = null
   /** 3D 手牌的两段式出牌：第一下选中（牌抬起来），第二下才打出 */
   private selectedIndex = -1
   private selectedTile: Tile | null = null
@@ -244,7 +249,8 @@ export class TableView {
       this.wallVisual(),
       this.dealtCounts,
       this.phase === 'dealing',
-      { selectedIndex: this.selectedIndex, dimTiles: this.dimTiles() }
+      { selectedIndex: this.selectedIndex, dimTiles: this.dimTiles() },
+      this.tenpaiSeat
     )
     this.threeView.graphics.clear()
     this.threeView.graphics.drawTexture(this.three.texture, 0, 0, this.viewW, this.viewH)
@@ -627,6 +633,7 @@ export class TableView {
     this.content.destroyChildren()
     this.content.graphics.clear()
     this.overlay.destroyChildren()
+    this.tenpaiSeat = this.findTenpaiSeat()
     if (this.is3D()) this.sync3D()
 
     if (this.phase === 'idle') {
@@ -1091,6 +1098,38 @@ export class TableView {
     return `三打一 · ${who}亮${hand.threeToOneSuit ?? '牌'}`
   }
 
+  /** 三打一的明牌家当前是否听牌 */
+  private findTenpaiSeat(): number | null {
+    const hand = this.hand
+    const seat = hand?.threeToOneSeat
+    if (!hand || seat === null || seat === undefined) return null
+    return isTenpaiHand(hand.players[seat]) ? seat : null
+  }
+
+  /** 红底红字的「听」标记：摆在明牌家手牌前面 */
+  private drawListenBadge(x: number, y: number) {
+    const size = this.u(LISTEN_BADGE)
+    const badge = makePanel(size, size, this.u(4), '#B03A26')
+    badge.pos(Math.round(x), Math.round(y))
+    badge.mouseEnabled = false
+    const inner = makePanel(size - this.u(4), size - this.u(4), this.u(3), '#F7EEDA')
+    inner.pos(this.u(2), this.u(2))
+    badge.addChild(inner)
+    badge.addChild(
+      makeText('听', {
+        size: this.u(14),
+        color: '#B03A26',
+        bold: true,
+        font: FONT_SERIF,
+        align: 'center',
+        valign: 'middle',
+        width: size,
+        height: size
+      })
+    )
+    this.content.addChild(badge)
+  }
+
   private revealTiles(seat: number): Tile[] {
     const hand = this.hand
     if (!hand) return []
@@ -1300,6 +1339,11 @@ export class TableView {
       this.content.addChild(tile)
       hx += oppW
     }
+
+    if (this.tenpaiSeat === 2) {
+      const tileH = Math.round(oppW * TILE_RATIO)
+      this.drawListenBadge(startX + rackW, y + tileH + this.u(2))
+    }
   }
 
   private renderSideSeat(
@@ -1323,13 +1367,16 @@ export class TableView {
     const infoH = this.u(52)
     const blockH = infoH + handLen + (rack ? this.u(6) + rack.height : 0)
     const blockW = Math.max(this.u(30), colW)
-    const x = m.landscape
+    // 横屏左右两侧还有余量：把上家/下家的整块（手牌、副露、座位信息）再往两边推一点
+    const sideOut = m.landscape ? this.u(48) : 0
+    const rawX = m.landscape
       ? left
-        ? m.ringX - blockW - this.u(6)
-        : m.ringX + m.ringW + this.u(6)
+        ? m.ringX - blockW - this.u(6) - sideOut
+        : m.ringX + m.ringW + this.u(6) + sideOut
       : left
         ? this.u(4)
         : m.boardW - this.u(4) - blockW
+    const x = Math.max(this.u(2), Math.min(m.boardW - blockW - this.u(2), rawX))
     const y = m.boardH / 2 - blockH / 2
 
     this.seatMetaVertical(
@@ -1359,6 +1406,13 @@ export class TableView {
     if (rack) {
       rack.pos(Math.round(x + blockW / 2 - rack.width / 2), Math.round(y + infoH + handLen + this.u(6)))
       this.content.addChild(rack)
+    }
+
+    const seat = left ? 3 : 1
+    if (this.tenpaiSeat === seat) {
+      const size = this.u(LISTEN_BADGE)
+      const bx = left ? x + blockW / 2 + this.u(10) : x + blockW / 2 - size - this.u(10)
+      this.drawListenBadge(bx, y + infoH + this.u(2))
     }
   }
 
@@ -1506,6 +1560,10 @@ export class TableView {
       const rack = this.meldRackHorizontal(melds, m.meldW)
       rack.pos(Math.round(startX + handRowW + this.u(10)), Math.round(y + handH - rack.height))
       this.content.addChild(rack)
+    }
+
+    if (this.tenpaiSeat === 0) {
+      this.drawListenBadge(startX, y - this.u(LISTEN_BADGE) - this.u(3))
     }
   }
 
@@ -1883,7 +1941,7 @@ export class TableView {
         face: 'ghost',
         onClick: () => this.requestExit()
       })
-      exit.pos(m.boardW - this.u(54), this.u(8))
+      exit.pos(Math.round(m.ringX + m.ringW - this.u(130)), Math.round(m.ringY + this.u(34)))
       this.content.addChild(exit)
     }
   }
@@ -2404,6 +2462,16 @@ export class TableView {
     )
   }
 
+  /** 明牌家从「没听」变成「听牌」时喊一声；常驻的红色「听」由 render 画 */
+  private announceTenpai(prev: HandState | null, next: HandState) {
+    const seat = next.threeToOneSeat
+    if (seat === null || next.phase === 'over') return
+    if (!prev || prev.threeToOneSeat !== seat) return
+    if (isTenpaiHand(prev.players[seat])) return
+    if (!isTenpaiHand(next.players[seat])) return
+    this.flash(seat === 0 ? '你听牌了' : `${SEAT_NAMES[seat]}听牌！`)
+  }
+
   private clearTimers() {
     Laya.timer.clearAll(this)
     this.stopSpin()
@@ -2538,11 +2606,14 @@ export class TableView {
     if (!hand.players[seat].isAI && !(AUTO && seat === 0)) return
     const action = chooseAIAction(hand, seat)
     if (!action) return
+    let next: HandState
     try {
-      this.hand = applyAction(hand, action)
+      next = applyAction(hand, action)
     } catch {
       return
     }
+    this.hand = next
+    this.announceTenpai(hand, next)
     this.persist()
     this.render()
     this.schedule((900 + Math.random() * 900) * this.pace(), () => this.tick())
@@ -2563,6 +2634,7 @@ export class TableView {
     }
     this.hand = next
     this.announceThreeToOne(hand, next)
+    this.announceTenpai(hand, next)
     this.persist()
     this.render()
     this.schedule(delay * this.pace(), () => this.tick())

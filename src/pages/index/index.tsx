@@ -5,6 +5,7 @@ import {
   chooseAIAction,
   daLiaoCheWarning,
   forbiddenDiscardsFor,
+  isTenpaiHand,
   legalActions,
   playableDiscards,
   remainingTiles,
@@ -440,6 +441,14 @@ const TablePage = defineComponent({
       return hand.players[0].hand.length % 3 !== 2
     })
 
+    /** 三打一的明牌家是否听牌：红色「听」标记 */
+    const threeToOneTenpai = computed(() => {
+      const hand = state.value
+      const seat = hand?.threeToOneSeat
+      if (!hand || seat == null) return false
+      return isTenpaiHand(hand.players[seat])
+    })
+
     return () => {
       const hand = state.value
       const match = board.value
@@ -596,9 +605,16 @@ const TablePage = defineComponent({
                   )}
 
                   {playing && hand?.threeToOneSeat != null && !isOver && (
-                    <div class="text-[11px] leading-4 text-brass">
-                      三打一 · {hand.threeToOneSeat === 0 ? '你' : SEAT_NAMES[hand.threeToOneSeat]}亮
-                      {hand.threeToOneSuit ?? '牌'}
+                    <div class="flex items-center gap-1 text-[11px] leading-4 text-brass">
+                      <span>
+                        三打一 · {hand.threeToOneSeat === 0 ? '你' : SEAT_NAMES[hand.threeToOneSeat]}亮
+                        {hand.threeToOneSuit ?? '牌'}
+                      </span>
+                      {threeToOneTenpai.value && (
+                        <span class="rounded-[3px] border border-[#B03A26] bg-[#F7EEDA] px-1 text-[10px] font-bold leading-4 text-[#B03A26]">
+                          听
+                        </span>
+                      )}
                     </div>
                   )}
 
@@ -803,6 +819,7 @@ const TablePage = defineComponent({
                   reveal={isOver && winnerSeat === 2}
                   open={hand?.threeToOneSeat === 2}
                   openSuit={hand?.threeToOneSeat === 2 ? hand.threeToOneSuit : null}
+                  listen={threeToOneTenpai.value && hand?.threeToOneSeat === 2}
                   dealing={phase.value === 'dealing'}
                 />
               </div>
@@ -820,6 +837,7 @@ const TablePage = defineComponent({
                   reveal={isOver && winnerSeat === 3}
                   open={hand?.threeToOneSeat === 3}
                   openSuit={hand?.threeToOneSeat === 3 ? hand.threeToOneSuit : null}
+                  listen={threeToOneTenpai.value && hand?.threeToOneSeat === 3}
                   dealing={phase.value === 'dealing'}
                 />
               </div>
@@ -837,6 +855,7 @@ const TablePage = defineComponent({
                   reveal={isOver && winnerSeat === 1}
                   open={hand?.threeToOneSeat === 1}
                   openSuit={hand?.threeToOneSeat === 1 ? hand.threeToOneSuit : null}
+                  listen={threeToOneTenpai.value && hand?.threeToOneSeat === 1}
                   dealing={phase.value === 'dealing'}
                 />
               </div>
@@ -847,7 +866,12 @@ const TablePage = defineComponent({
                   class="absolute bottom-1 left-1/2 z-20 flex items-end justify-center gap-3"
                   style={{ transform: 'translateX(-50%)' }}
                 >
-                  <div class="flex">
+                  <div class="relative flex">
+                    {threeToOneTenpai.value && hand.threeToOneSeat === 0 && (
+                      <span class="absolute -top-6 left-0 z-10 rounded-[3px] border border-[#B03A26] bg-[#F7EEDA] px-1.5 py-0.5 text-[12px] font-bold leading-none text-[#B03A26] shadow">
+                        听
+                      </span>
+                    )}
                     {myHand.map((tile, index) => {
                       const isDrawn = !!myDrawn.value && index === myHand.length - 1
                       const canPlay =

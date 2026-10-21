@@ -155,6 +155,8 @@ export const OpponentSeat = defineComponent({
     /** 三打一：缺另一门的那家把「三家缺的那门」翻开，其余手牌不亮 */
     open: { type: Boolean, default: false },
     openSuit: { type: String as PropType<NumberSuit | null>, default: null },
+    /** 三打一的明牌家已经听牌：手牌前面挂红色「听」 */
+    listen: { type: Boolean, default: false },
     /** 发牌动画中：最后一张带入场动画 */
     dealing: { type: Boolean, default: false }
   },
@@ -226,7 +228,21 @@ export const OpponentSeat = defineComponent({
             </div>
           )}
 
-          <div class={['flex gap-[2px]', vertical ? 'flex-col items-center' : 'flex-row items-end']}>
+          <div class={['relative flex gap-[2px]', vertical ? 'flex-col items-center' : 'flex-row items-end']}>
+            {props.listen && (
+              <span
+                class={[
+                  'absolute z-10 rounded-[3px] border border-[#B03A26] bg-[#F7EEDA] px-1 text-[11px] font-bold leading-4 text-[#B03A26] shadow',
+                  vertical
+                    ? props.side === 'left'
+                      ? '-right-6 top-0'
+                      : '-left-6 top-0'
+                    : '-bottom-6 left-0'
+                ]}
+              >
+                听
+              </span>
+            )}
             {meldFirst ? melds : null}
             {hand}
             {meldFirst ? null : melds}
