@@ -355,6 +355,22 @@ section('3. 七对、大吊车、三打一、杠开、清水')
   check('三家缺同一门 → 三打一 +5', itemPoints({ concealed: [...suitTiles('筒'), '2条', '2条', '2条', '5条', '5条'], threeToOne: true }, '三打一'), 5)
   check('三打一附 1 小摸子', threeToOne.mozi.items.some(i => i.name === '三打一' && i.units === 0.5), true)
 
+  // 三打一：三家缺条、自己缺万时，自己从定缺结束起标记为明牌；成牌时自动带 +5 / 小摸子
+  let threeState = ready([
+    ['1筒', '2筒', '3筒', '4筒', '5筒', '6筒', '7筒', '8筒', '9筒', '2条', '2条', '2条', '5条'],
+    baseHands()[1],
+    baseHands()[2],
+    baseHands()[3]
+  ], basePiles(), ['万', '条', '条', '条'])
+  check('三打一：定缺后标记明牌座位', threeState.threeToOneSeat, 0)
+  threeState.players[0].hand = ['1筒', '2筒', '3筒', '4筒', '5筒', '6筒', '7筒', '8筒', '9筒', '2条', '2条', '2条', '5条']
+  threeState.phase = 'discard'
+  threeState.turn = 0
+  threeState.drawnTile = '5条'
+  const threeWin = applyAction(threeState, { type: 'win', seat: 0 })
+  check('三打一：成牌时自动计入 +5', threeWin.winner?.score.points.items.some(i => i.name === '三打一' && i.points === 5), true)
+  check('三打一：成牌时自动计入小摸子', threeWin.winner?.score.mozi.items.some(i => i.name === '三打一' && i.units === 0.5), true)
+
   const kongOpen = { concealed: [...suitTiles('筒'), '5条', '5条'], isAfterKong: true }
   const kongOpenResult = scoreBoth('杠开', kongOpen)
   check('杠后补摸 → 杠开 +5', itemPoints(kongOpen, '杠开'), 5)
@@ -603,6 +619,35 @@ section('7. 大吊车禁打')
 section('8. 对局状态机：缺门、接牌优先级、碰杠、暗杠、加杠、抢杠')
 
 {
+  // 三打一：三家缺同一门，缺另一门的那家从定缺结束起翻牌明打
+  const odd = ready(baseHands(), basePiles(), ['万', '条', '条', '条'])
+  check('三打一：三家同缺条 → 缺万的一家明牌', odd.threeToOneSeat, 0)
+  check('三打一：日志记录翻牌明打', odd.logs.some(line => line.includes('三打一')), true)
+  const twoTwo = ready(baseHands(), basePiles(), ['万', '万', '条', '条'])
+  check('三打一：2:2 不触发', twoTwo.threeToOneSeat, null)
+  const allSame = ready(baseHands(), basePiles(), ['筒', '筒', '筒', '筒'])
+  check('三打一：四家同缺不触发', allSame.threeToOneSeat, null)
+  const oddOther = ready(baseHands(), basePiles(), ['条', '条', '条', '万'])
+  check('三打一：明牌家随座位变化', oddOther.threeToOneSeat, 3)
+
+  // 明牌家成牌：+5 点 + 1 小摸子
+  let oddWin = ready(baseHands(), basePiles(), ['万', '条', '条', '条'])
+  oddWin.players[0].hand = ['1筒', '2筒', '3筒', '4筒', '5筒', '6筒', '7筒', '8筒', '9筒', '1条', '2条', '3条', '9条', '9条']
+  oddWin.phase = 'discard'
+  oddWin.turn = 0
+  oddWin.drawnTile = '9条'
+  oddWin = applyAction(oddWin, { type: 'win', seat: 0 })
+  check(
+    '三打一：明牌家成牌 +5',
+    oddWin.winner?.score.points.items.some(item => item.name === '三打一' && item.points === 5),
+    true
+  )
+  check(
+    '三打一：明牌家成牌附 1 小摸子',
+    oddWin.winner?.score.mozi.items.some(item => item.name === '三打一' && item.units === 0.5),
+    true
+  )
+
   // 缺门：手里有缺门牌必须优先打缺门牌
   const hands = baseHands()
   hands[0] = ['1万', '2万', '3万', '1筒', '2筒', '3筒', '4筒', '5筒', '6筒', '7筒', '8筒', '9筒', '1条', '2条']
@@ -784,8 +829,13 @@ section('9. 牌墙、流局、结算、AI')
   winState.phase = 'discard'
   winState.turn = 0
   winState.drawnTile = '5条'
+  // 三家只剩 10 点，接牌成牌 34 点足以把三家点数一次吸光 → 大拿
+  winState.players[0].points = 10
+  winState.players[2].points = 10
+  winState.players[3].points = 10
   winState = applyAction(winState, { type: 'discard', seat: 0, tile: '5条' })
   winState = applyAction(winState, { type: 'claim', seat: 1, claim: '成' })
+  check('大拿：游戏内把三家剩余点数传入结算', winState.winner?.score.bigWin.reasons.some(r => r.name === '一把吸光三家点数'), true)
   const settlement = settleHand(winState)
   const sum = (list: number[]) => Number(list.reduce((a, b) => a + b, 0).toFixed(1))
   check('结算：赢家是接牌者', settlement?.winnerSeat, 1)
@@ -846,6 +896,7 @@ section('10. LayaAir 移植一致性与牌墙')
       shortages: state.players.map(p => p.shortage)
     })
   check('LayaAir 与 web 开局状态一致', summary(web), summary(laya as HandState))
+  check('LayaAir 与 web 三打一标记一致', laya.threeToOneSeat, web.threeToOneSeat)
   web = applyAction(web, { type: 'draw', seat: 0 })
   laya = layaApplyAction(laya, { type: 'draw', seat: 0 })
   check('LayaAir 与 web 摸牌状态一致', summary(web), summary(laya as HandState))

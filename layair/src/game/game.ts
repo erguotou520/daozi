@@ -106,6 +106,11 @@ export interface HandState {
   afterKong: boolean
   /** 是否本局首牌（清水判定） */
   isFirstHand: boolean
+  /**
+   * 三打一：四家定缺后三家缺同一门、另一家缺另一门时，
+   * 缺另一门的那一家（必须翻牌明打）；不是 3:1 则为 null。
+   */
+  threeToOneSeat: number | null
   bans: DaLiaoCheBan[]
   /** 最近一次「打出禁打牌」的违规记录（成牌时算点炮） */
   banViolation: { seat: number; tile: Tile } | null
@@ -289,6 +294,7 @@ export function createHand(options: CreateHandOptions): HandState {
     drawnTile: null,
     afterKong: false,
     isFirstHand: options.isFirstHand ?? false,
+    threeToOneSeat: null,
     bans: [],
     banViolation: null,
     winner: null,
@@ -403,6 +409,23 @@ export function isShortageTile(player: PlayerState, tile: Tile): boolean {
 /** 手上还没打完的缺门牌 */
 export function shortageTiles(player: PlayerState): Tile[] {
   return player.hand.filter(tile => isShortageTile(player, tile))
+}
+
+/**
+ * 三打一：三家缺同一门、剩下一家缺另一门时，那一家必须翻牌明打。
+ * 返回需要明牌的那一家；四家同缺或两两不同时返回 null。
+ */
+export function threeToOneSeatOf(state: HandState): number | null {
+  const players = state.players
+  if (players.some(player => player.shortage === null)) return null
+  for (const player of players) {
+    const others = players.filter(other => other.seat !== player.seat)
+    const shared = others[0].shortage
+    if (shared !== player.shortage && others.every(other => other.shortage === shared)) {
+      return player.seat
+    }
+  }
+  return null
 }
 
 /** 某张牌在别家已公开的张数（打出的 + 副露的） */
@@ -605,6 +628,10 @@ export function applyAction(state: HandState, action: RoundAction): HandState {
     if (next.players.every(item => item.shortage)) {
       next.phase = 'draw'
       next.turn = next.dealerSeat
+      next.threeToOneSeat = threeToOneSeatOf(next)
+      if (next.threeToOneSeat !== null) {
+        next.logs.push(`${next.threeToOneSeat} 号位三打一，翻牌明打`)
+      }
     }
     return next
   }
@@ -895,14 +922,8 @@ function resolveWin(
   const concealed = selfDraw ? [...player.hand] : winTile ? [...player.hand, winTile] : [...player.hand]
   const visible = winTile ? visibleCount(state, winTile, seat) : 0
 
-  // 三打一：其他三家缺同一门，自己不缺那一门
-  const others = state.players.filter(item => item.seat !== seat)
-  const shared = others[0].shortage
-  const threeToOne =
-    shared !== null &&
-    player.shortage !== null &&
-    others.every(item => item.shortage === shared) &&
-    player.shortage !== shared
+  // 三打一：三家缺同一门、自己缺另一门（定缺结束时已经标记，老存档则按缺门重算）
+  const threeToOne = (state.threeToOneSeat ?? threeToOneSeatOf(state)) === seat
 
   // 大吊车禁打点炮：自己正处大吊车，别人打出禁牌
   const ban = state.bans.find(item => item.seat === seat)
@@ -918,7 +939,9 @@ function resolveWin(
     isFirstHand: state.isFirstHand,
     isAfterKong: state.afterKong,
     threeToOne,
-    singlePayer
+    singlePayer,
+    // 大拿规则：一把成牌的点数 ≥ 其他三家剩余点数时，三家全部清零
+    opponentsPoints: state.players.filter(item => item.seat !== seat).map(item => item.points)
   })
 
   state.winner = { seat, selfDraw, score, winTile }
