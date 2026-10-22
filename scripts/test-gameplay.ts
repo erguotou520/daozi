@@ -36,10 +36,12 @@ import {
   playableDiscards,
   settleHand,
   wallVisualOf,
+  type HandSettlement,
   type HandState,
   type PlayerState,
   type RoundAction
 } from '../src/game/game'
+import { applyHandSettlement, createMatch, startHand } from '../src/game/match'
 import {
   applyAction as layaApplyAction,
   createHand as layaCreateHand,
@@ -229,6 +231,29 @@ section('1. 基础结构：只子、通、连号、对子、四活、不动手')
   check('四活 + 七对 → 大拿', fourResult.bigWin.isBigWin, true)
   check('大拿原因含七对/四活组合', fourResult.bigWin.reasons.some(r => r.name === '两个大牌型'), true)
 
+  // 四活（碰 + 手里第 4 张）：碰 5 条 + 567 条里的 5 条，仍然四张未开杠
+  // 这一手同时是「边张 12 等 3」的压当：4 + 碰1 + 只子1 + 通6 + 四活10 + 压当1 = 23，自摸 ×2 = 46
+  const pungFour = {
+    concealed: ['1筒', '2筒', '3筒', '5筒', '5筒', '7筒', '8筒', '9筒', '5条', '6条', '7条'],
+    melds: [pung('5条')],
+    winTile: '3筒',
+    selfDraw: true,
+    visibleWinTileCount: 1
+  }
+  scoreBoth('四活（碰出三张 + 手里第 4 张）', pungFour)
+  check('碰 5 条 + 手里 5 条 → 四活 +10', itemPoints(pungFour, '四活'), 10)
+  check('12 等 3 边张 → 压当 +1', itemPoints(pungFour, '压当'), 1)
+  check('点数 = 23 × 2 = 46', scoreHand(pungFour).points.total, 46)
+  check('压当摸子 = 1 个大摸子', scoreHand(pungFour).mozi.units, 1)
+  check('46 点未到大拿线', scoreHand(pungFour).bigWin.isBigWin, false)
+
+  // 开杠的四张不算四活
+  const kongsFour = {
+    concealed: ['1筒', '2筒', '3筒', '5筒', '5筒', '7筒', '8筒', '9筒', '6条', '7条', '8条'],
+    melds: [kong('5条', '明杠')]
+  }
+  check('开杠的四张不算四活', hasItem(kongsFour, '四活'), false)
+
   // 不动手：没有碰杠
   const buDong = { concealed: [...suitTiles('筒'), '2条', '3条', '4条', '5条', '5条'] }
   scoreBoth('不动手', buDong)
@@ -317,6 +342,18 @@ section('2. 成牌张相关：压当、单吊、枯只压、老小对')
   check('12 等 3 + 外面 3 张 → 枯只压', highEdge.mozi.items.some(i => i.name === '枯只压'), true)
   const twoWay = scoreBoth('两面 23 等 1', { concealed: ['1筒', '2筒', '3筒', ...edgeBase], winTile: '1筒', visibleWinTileCount: 3 })
   check('23 等 1 两面 → 不算枯只压', twoWay.mozi.items.some(i => i.name === '枯只压'), false)
+
+  // 边张压当：外面不足 3 张（不是枯只压）时，12 等 3 仍算压当，+1 点 / 1 个大摸子
+  const edgeYaDangInput = {
+    concealed: ['1筒', '2筒', '3筒', ...edgeBase],
+    winTile: '3筒',
+    visibleWinTileCount: 1
+  }
+  const edgeYaDang = scoreBoth('边张压当 12 等 3', edgeYaDangInput)
+  check('12 等 3 且外面不足 3 张 → 压当', edgeYaDang.patterns['压当'], true)
+  check('边张压当 +1 点', itemPoints(edgeYaDangInput, '压当'), 1)
+  check('边张压当摸子 1 个大摸子', edgeYaDang.mozi.units, 1)
+  check('边张压当提示「边张」', edgeYaDang.points.items.find(i => i.name === '压当')?.detail, '成牌张补顺子边张')
 
   // 老小对：同门对 1 + 对 9，碰出来的也算；只计一门
   const laoXiao = {
@@ -984,6 +1021,45 @@ section('10. LayaAir 移植一致性与牌墙')
   daLiao.players[0].melds = [pung('1筒'), pung('2筒'), pung('3筒'), pung('4筒')]
   daLiao.players[0].hand = ['5万']
   check('大吊车判定：四副露 + 手牌一张', isDaLiaoChe(daLiao.players[0]), true)
+}
+
+/* ------------------------------------------------------------------ *
+ * 东家：成牌者坐东，骰子只定开牌墙
+ * ------------------------------------------------------------------ */
+
+section('东家：成牌者坐庄')
+
+{
+  const settle = (winnerSeat: number, gameOver = false): HandSettlement => ({
+    winnerSeat,
+    selfDraw: false,
+    score: null as unknown as HandSettlement['score'],
+    pointDelta: [0, 0, 0, 0],
+    moneyDelta: [0, 0, 0, 0],
+    gameOver
+  })
+
+  let match = startHand(createMatch({ rollerSeat: 0 }), 2, 6)
+  check('第 1 把：掷骰的人坐东', match.current?.dealerSeat, 0)
+  check('第 1 把：2+6=8 → 开牌墙在上家（座位 3）', match.current?.wallSeat, 3)
+
+  match = applyHandSettlement(match, settle(2))
+  match = startHand(match, 1, 1)
+  check('赢家坐下一把的东：1+1=2 点也不改东家', `${match.current?.dealerSeat}/${match.current?.wallSeat}`, '2/3')
+  check('东家拿 14 张', match.current?.players[2].hand.length, 14)
+
+  const draw = applyHandSettlement(match, settle(-1))
+  check('流局：东家连坐（掷骰权不转）', draw.rollerSeat, 2)
+  check('流局后下一把仍是同一个东家', startHand(draw, 3, 4).current?.dealerSeat, 2)
+
+  // 调圈：赢家换座后掷骰权跟着人走
+  const circle = applyHandSettlement(
+    { ...createMatch({ rollerSeat: 2 }), roundIndex: 4 },
+    settle(2, true),
+    { circleDiceSum: 7 }
+  )
+  check('调圈：赢家从座位 2 换到座位 3', circle.seats.join(','), '0,3,1,2')
+  check('调圈：东家跟着赢家到新座位', circle.rollerSeat, 3)
 }
 
 /* ------------------------------------------------------------------ */

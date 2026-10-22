@@ -2091,7 +2091,7 @@ export class TableView {
     let used = 8 + 14 + 28 + 46 + 38 + 6
     if (bigWin) used += 14
     if (kongOpen) used += 14
-    if (gameOver) used += 18
+    used += 18
     const dockTop = m.boardH - this.u(6) - m.handH - this.u(32) - this.u(4)
     const maxH = m.landscape ? Math.max(220, dockTop - m.ringY - this.u(6)) : m.ringH * 0.92
     const panelH = Math.round(Math.min(maxH, this.u(used)))
@@ -2207,20 +2207,23 @@ export class TableView {
       y += this.u(14)
     }
 
-    // 一局还没结束时只算点数，不显示要付多少钱
-    if (gameOver) {
-      this.content.addChild(
-        makeText(`${win.score.money.perOpponentTotal} 元/家 · 合计 ${win.score.money.total} 元`, {
+    // 本局没结束时只结算点数，不显示要付多少钱；点数付完（本局结束）才亮金额
+    this.content.addChild(
+      makeText(
+        gameOver
+          ? `${win.score.money.perOpponentTotal} 元/家 · 合计 ${win.score.money.total} 元`
+          : '本局未结束 · 只结算点数',
+        {
           size: this.u(10),
-          color: COLORS.brass,
+          color: gameOver ? COLORS.brass : COLORS.mist,
           width: panelW - this.u(24),
           height: this.u(16),
           x: px + this.u(12),
           y
-        })
+        }
       )
-      y += this.u(18)
-    }
+    )
+    y += this.u(18)
 
     const cellGap = this.u(4)
     const cellW = (panelW - this.u(24)) / 4

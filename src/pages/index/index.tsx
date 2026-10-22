@@ -586,7 +586,7 @@ const TablePage = defineComponent({
 
                   {phase.value === 'dealing' && dice.value && (
                     <div class="text-[11px] leading-4 text-brass">
-                      {dice.value.a}+{dice.value.b}={dice.value.a + dice.value.b} · 东家 {SEAT_NAMES[hand?.dealerSeat ?? 0]}
+                      {dice.value.a}+{dice.value.b}={dice.value.a + dice.value.b} · 开牌 {SEAT_NAMES[hand?.wallSeat ?? 0]}
                     </div>
                   )}
 
@@ -765,10 +765,13 @@ const TablePage = defineComponent({
                           {win.score.points.items.some(item => item.name === '杠开') && (
                             <span class="rounded-[3px] bg-brass px-1.5 text-[11px] leading-5 text-ink">杠后赛花</span>
                           )}
-                          {result?.gameOver && (
+                          {/* 本局没结束时只结算点数，不显示要付多少钱；点数付完（本局结束）才亮金额 */}
+                          {result?.gameOver ? (
                             <span class="ml-auto text-[12px] text-brass">
                               {win.score.money.perOpponentTotal} 元/家 · 合计 {win.score.money.total} 元
                             </span>
+                          ) : (
+                            <span class="ml-auto text-[11px] text-mist">本局未结束 · 只结算点数</span>
                           )}
                         </div>
 

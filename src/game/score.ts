@@ -427,7 +427,7 @@ interface HandAnalysis {
   isFlush: boolean
   isGrassOneColor: boolean
   isBuDongShou: boolean
-  winTileRole: 'pair' | 'middle' | 'none'
+  winTileRole: 'pair' | 'middle' | 'edge' | 'none'
   /** 成牌张是「只能等这一张」的边张/卡张（12 等 3、89 等 7、46 等 5） */
   winTileOnlyWait: boolean
 }
@@ -489,7 +489,12 @@ function analyze(input: ScoreInput, rules: Rules): HandAnalysis {
 
   const isAllTriplets = !!valid && valid.sets.every(s => s.kind === 'triplet')
 
-  const fourOfAKind = [...concealedCounts.entries()].filter(([, n]) => n === 4).map(([tile]) => tile)
+  // 四活：四张相同且没开杠。碰出的三张 + 手里第 4 张也算（例：碰 5 条 + 567 条里的 5 条）。
+  // 明杠/暗杠的四张已经开杠，不算四活。
+  const kongedTiles = new Set(melds.filter(isKong).map(meld => meld.tile))
+  const fourOfAKind = [...counts.entries()]
+    .filter(([tile, n]) => n === 4 && !kongedTiles.has(tile))
+    .map(([tile]) => tile)
 
   const bangBangSuits: NumberSuit[] = []
   const smallRuns: NumberSuit[] = []
@@ -560,7 +565,7 @@ function analyze(input: ScoreInput, rules: Rules): HandAnalysis {
     isBuDongShou = melds.every(m => m.kind === '暗杠')
   }
 
-  // 成牌张在拆解中的角色：将牌（单吊）或顺子中张（压当/卡张）
+  // 成牌张在拆解中的角色：将牌（单吊）、顺子中张（压当·卡张）或顺子边张（压当·边张）
   let winTileRole: HandAnalysis['winTileRole'] = 'none'
   // 只等一张的成牌张：卡张（4_6 等 5）和边张（12 等 3 / 89 等 7）。
   // 两面（23 等 1、4）和单吊不算 —— 外面出完其中一张，还有别的牌能成。
@@ -581,11 +586,13 @@ function analyze(input: ScoreInput, rules: Rules): HandAnalysis {
           // 卡张：只等中间这一张
           winTileRole = 'middle'
           winTileOnlyWait = true
-        } else if (index === 2 && ranks[0] === 1) {
-          // 12 等 3：边张，只等 3
+        } else if (index === 2 && ranks[0] === 1 && winTileRole === 'none') {
+          // 12 等 3：边张，只等 3 —— 也算压当
+          winTileRole = 'edge'
           winTileOnlyWait = true
-        } else if (index === 0 && ranks[2] === 9) {
-          // 89 等 7：边张，只等 7
+        } else if (index === 0 && ranks[2] === 9 && winTileRole === 'none') {
+          // 89 等 7：边张，只等 7 —— 也算压当
+          winTileRole = 'edge'
           winTileOnlyWait = true
         }
       }
@@ -828,12 +835,18 @@ export function scoreHand(input: ScoreInput): ScoreResult {
   }
 
   // 压当 / 单吊
-  const isYaDang = a.winTileRole === 'middle'
+  // 压当＝成牌张补顺子的唯一缺口：卡张（4_6 等 5）和边张（12 等 3、89 等 7）都算
+  const isYaDang = a.winTileRole === 'middle' || a.winTileRole === 'edge'
   const isDanDiao = a.winTileRole === 'pair'
   if (isYaDang) patterns['压当'] = true
   if (isDanDiao) patterns['单吊'] = true
   if (isYaDang && enabled('压当')) {
-    items.push({ name: '压当', points: rules.patternPoints.压当, count: 1, detail: '成牌张补顺子中张' })
+    items.push({
+      name: '压当',
+      points: rules.patternPoints.压当,
+      count: 1,
+      detail: a.winTileRole === 'edge' ? '成牌张补顺子边张' : '成牌张补顺子中张'
+    })
   }
   if (isDanDiao && enabled('单吊')) {
     items.push({ name: '单吊', points: rules.patternPoints.单吊, count: 1, detail: '成牌张补将牌' })
