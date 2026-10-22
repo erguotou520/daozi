@@ -3041,7 +3041,7 @@ export class TableView {
 
   /**
    * 截图分享：右上角分享图标、一把结束后的「分享」按钮都走这里。
-   * 先把当前画面截成一张图，再丢进微信的「分享图片」弹窗，直接把牌桌发出去。
+   * 先把当前画面截成一张图，再丢进微信的「分享图片」弹窗。
    * 小程序本身的分享（右上角菜单里的发送给朋友 / 分享到朋友圈）另走 initShare，互不影响。
    */
   private shareScreenshot() {
@@ -3052,35 +3052,171 @@ export class TableView {
     }
     const path = this.captureScreenshot()
     if (!path) {
-      this.flash('这张没截成，再点一次试试')
+      this.flash(`截图失败：${this.shotError || '未知原因'}`)
       return
     }
-    // 微信「分享图片」弹窗：发送给朋友 / 收藏 / 下载；基础库 2.14.3 以前没有这个接口
-    if (!shareImage(path)) shareToFriend({ imageUrl: path })
+    // 微信「分享图片」弹窗：发送给朋友 / 收藏 / 下载
+    const opened = shareImage(path, {
+      onFail: reason => this.flash(`分享没调起来：${reason.slice(0, 22)}`)
+    })
+    if (!opened) {
+      // 基础库 2.14.3 以前没有 showShareImageMenu，退回转发卡片（图用这张截图）
+      if (shareToFriend({ imageUrl: path })) this.flash('用转发卡片发出去，图就是这张截图')
+      else this.flash('这台微信不支持发图片')
+    }
+  }
+
+  /** 上一次截图失败的原因：直接闪到界面上，真机调试时一眼看出卡在哪一步 */
+  private shotError = ''
+
+  /** 微信的主画布（渲染这张牌桌的那块屏幕画布） */
+  private mainCanvas(): any {
+    const g: any = globalThis as any
+    const candidates = [
+      (Laya.Browser as any).mainCanvas?.source,
+      g.GameGlobal?.canvas,
+      g.canvas
+    ]
+    for (const canvas of candidates) {
+      if (canvas && typeof canvas.toTempFilePathSync === 'function') return canvas
+    }
+    return null
   }
 
   /**
-   * 把当前画面截成一张本地临时图，返回微信能用的路径（浏览器 / IDE 预览里返回 null）。
-   * 用 Laya 自己的 drawToCanvas：它把舞台额外渲一遍到 RenderTexture 再 readPixels，
-   * 所以不依赖 WebGL 的 preserveDrawingBuffer（LayaAir 默认是关的，直接 canvas.toTempFilePath
-   * 有概率截到空白）。
+   * 把当前画面截成一张本地临时图，返回微信能用的路径。
+   *
+   * 小游戏真机上 `Laya.stage.drawToCanvas` 要经过引擎的 ImageData 中转，适配库那层在小游戏里
+   * 不一定可用（真机上表现为点了没反应），所以这里按成功率排三条路：
+   * 1. 主画布 canvas.toTempFilePathSync —— 微信自己的截图接口，不经过 Laya；
+   * 2. RenderTexture 读像素 → 自己用 ctx.createImageData 拼图 → 导出（不依赖全局 ImageData）；
+   * 3. Laya 的 drawToCanvas —— 浏览器 / IDE 预览走这条。
    */
   private captureScreenshot(): string | null {
+    this.shotError = ''
+
+    // 1) RenderTexture 读像素 → 自己拼 2D 图。小游戏里最稳：
+    //    不走 Laya 的 ImageData 中转，也不依赖 WebGL 的 preserveDrawingBuffer
+    const viaRt = this.captureWithRenderTexture()
+    if (viaRt) return viaRt
+
+    // 2) 主画布 canvas.toTempFilePathSync —— 微信自己的截图接口
+    const main = this.mainCanvas()
+    if (main) {
+      try {
+        const destWidth = 1000
+        const width = main.width || Laya.Browser.clientWidth || Laya.stage.width
+        const height = main.height || Laya.Browser.clientHeight || Laya.stage.height
+        if (width && height) {
+          const path = main.toTempFilePathSync({
+            x: 0,
+            y: 0,
+            width,
+            height,
+            destWidth,
+            destHeight: Math.round((destWidth * height) / width)
+          })
+          // WebGL 主画布偶尔导出全黑/空白：文件特别小就当没截到
+          if (path && !this.looksBlank(path)) return path
+          this.shotError = '主画布导出的是空白图'
+        }
+      } catch (error) {
+        this.shotError = '主画布导出失败'
+        console.warn('[share] 主画布截图失败', error)
+      }
+    }
+
+    // 3) Laya 自带 drawToCanvas（浏览器 / IDE 预览走这条）
     try {
-      // 尺寸必须用「屏幕」大小而不是 stage 设计尺寸：drawToCanvas 走的是 on-screen
-      // 那条渲染路径（prepareOSR），传 1334×750 这类设计尺寸会 RangeError: offset is out of bounds。
+      const destWidth = 1000
       const width = Laya.Browser.clientWidth || Laya.stage.width
       const height = Laya.Browser.clientHeight || Laya.stage.height
       const shot: any = (Laya.stage as any).drawToCanvas(width, height, 0, 0)
-      const canvas: any = shot?.source ?? shot
-      if (!canvas || typeof canvas.toTempFilePathSync !== 'function') return null
-      const shotWidth = canvas.width || width
-      const shotHeight = canvas.height || height
-      // 宽给到 1000：聊天里够清楚，又不至于让临时文件太大
-      const destWidth = 1000
-      const destHeight = Math.round((destWidth * shotHeight) / shotWidth)
-      return canvas.toTempFilePathSync({ x: 0, y: 0, width: shotWidth, height: shotHeight, destWidth, destHeight }) ?? null
+      const canvas: any = shot?.source ?? shot?.getCanvas?.() ?? shot
+      if (canvas && typeof canvas.toTempFilePathSync === 'function') {
+        const shotWidth = canvas.width || width
+        const shotHeight = canvas.height || height
+        const path = canvas.toTempFilePathSync({
+          x: 0,
+          y: 0,
+          width: shotWidth,
+          height: shotHeight,
+          destWidth,
+          destHeight: Math.round((destWidth * shotHeight) / shotWidth)
+        })
+        if (path) return path
+        this.shotError = 'drawToCanvas 导出为空'
+      }
+    } catch (error) {
+      this.shotError = this.shotError || 'drawToCanvas 失败'
+      console.warn('[share] drawToCanvas 截图失败', error)
+    }
+
+    return null
+  }
+
+  /** 临时文件是不是小得可疑（空白截图通常只有几 KB） */
+  private looksBlank(path: string): boolean {
+    try {
+      const wx: any = (globalThis as any).wx
+      const size = wx?.getFileSystemManager?.()?.statSync?.(path)?.size ?? 0
+      return size > 0 && size < 20000
     } catch {
+      return false
+    }
+  }
+
+  /** 用 RenderTexture 读像素，再用 2D canvas 拼回来导出（小游戏里没有全局 ImageData） */
+  private captureWithRenderTexture(): string | null {
+    try {
+      const width = Laya.Browser.clientWidth || Laya.stage.width
+      const height = Laya.Browser.clientHeight || Laya.stage.height
+      if (!width || !height) {
+        this.shotError = this.shotError || '画布尺寸是 0'
+        return null
+      }
+      const wx: any = (globalThis as any).wx
+      if (!wx?.createCanvas) {
+        this.shotError = '没有离屏画布接口'
+        return null
+      }
+      const rt: any = (Laya.stage as any).drawToRenderTexture2D(width, height, 0, 0)
+      const pixels = rt?.getData?.(0, 0, width, height) as Uint8Array | null
+      if (!pixels || !pixels.length) {
+        rt?.destroy?.()
+        this.shotError = '读不到像素'
+        return null
+      }
+      const canvas = wx.createCanvas()
+      canvas.width = width
+      canvas.height = height
+      const ctx = canvas.getContext('2d')
+      const image = ctx.createImageData(width, height)
+      // WebGL 的 readPixels 是从下往上，逐行倒着拷
+      const rowBytes = width * 4
+      for (let y = 0; y < height; y += 1) {
+        const src = (height - 1 - y) * rowBytes
+        image.data.set(pixels.subarray(src, src + rowBytes), y * rowBytes)
+      }
+      ctx.putImageData(image, 0, 0)
+      rt?.destroy?.()
+      const destWidth = 1000
+      const path = canvas.toTempFilePathSync?.({
+        x: 0,
+        y: 0,
+        width,
+        height,
+        destWidth,
+        destHeight: Math.round((destWidth * height) / width)
+      })
+      if (!path) {
+        this.shotError = '离屏画布导出为空'
+        return null
+      }
+      return path
+    } catch (error) {
+      this.shotError = this.shotError || '离屏渲染截图失败'
+      console.warn('[share] RenderTexture 截图失败', error)
       return null
     }
   }

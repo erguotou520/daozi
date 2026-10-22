@@ -129,11 +129,18 @@
 2. **菜单卡片**：`wx.onShareAppMessage` / `wx.onShareTimeline` 只负责「用户点右上角菜单」时返回卡片内容；
    朋友圈卡片带 `from=timeline`，转发卡片带 `from=share`，以后做邀请统计可以从
    `wx.getLaunchOptionsSync().query` 读到。不传 `imageUrl` 时微信拿当前游戏画面当卡片图（转发卡片 5:4）。
-3. **截图**：`Laya.stage.drawToCanvas(w, h, 0, 0)` → `canvas.toTempFilePathSync({ destWidth: 1000 })`。
-   - `drawToCanvas` 会把舞台额外渲一遍到 RenderTexture 再 readPixels，所以不依赖 WebGL 的
-     `preserveDrawingBuffer`（LayaAir 默认关着，直接对主画布 `toTempFilePath` 有概率截到空白）。
-   - 宽高要传**屏幕尺寸**（`Laya.Browser.clientWidth/clientHeight`），不能传 stage 的 1334×750 设计尺寸：
-     `drawToCanvas` 走 on-screen 那条渲染路径，传设计尺寸会直接 `RangeError: offset is out of bounds`。
+3. **截图**按成功率试三条路（小游戏真机上 `Laya.stage.drawToCanvas` 会走引擎的 `ImageData` 中转，
+   适配库那层在小游戏里不保证可用，真机上曾表现为点了没反应）：
+   1. `Laya.stage.drawToRenderTexture2D(w, h, 0, 0)` → `rt.getData()` 读像素 →
+      `wx.createCanvas()` 的 2D 画布 `ctx.createImageData` + `putImageData` → `toTempFilePathSync`。
+      不依赖全局 `ImageData`，也不依赖 WebGL 的 `preserveDrawingBuffer`（LayaAir 默认关着）。
+   2. 主画布 `canvas.toTempFilePathSync` —— 微信自己的截图接口，不经过 Laya；
+      文件小于 20KB 时当空白图处理，继续下一条。
+   3. `Laya.stage.drawToCanvas` → `toTempFilePathSync`（浏览器 / IDE 预览走这条）。
+   - 宽高一律传**屏幕尺寸**（`Laya.Browser.clientWidth/clientHeight`），不能传 stage 的 1334×750 设计尺寸：
+     on-screen 渲染那条路传设计尺寸会直接 `RangeError: offset is out of bounds`。
+   - 三条都失败时把原因闪在屏幕上（例如「截图失败：离屏渲染截图失败」），
+     真机调试的 console 里还有完整报错。
 4. **发图**：`wx.showShareImageMenu({ path })`（基础库 **2.14.3** 起）弹「分享图片」面板；
    老版本没有这个接口时退回 `wx.shareAppMessage({ imageUrl: path })`，把截图当转发卡片图。
 5. **朋友圈的限制（微信侧）**：基础库 **2.12.0** 起、目前**只有安卓微信**支持，且

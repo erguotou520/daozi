@@ -50,7 +50,7 @@ export interface WxLike {
   onShareAppMessage?: (listener: () => ShareCard) => void
   onShareTimeline?: (listener: () => ShareCard) => void
   shareAppMessage?: (options: ShareCard) => void
-  showShareImageMenu?: (options: { path: string }) => void
+  showShareImageMenu?: (options: { path: string; success?: () => void; fail?: (error: any) => void }) => void
   getAppBaseInfo?: () => { SDKVersion?: string }
   getSystemInfoSync?: () => { SDKVersion?: string }
 }
@@ -185,17 +185,29 @@ export function shareToFriend(next: ShareCard = {}, wx: WxLike | null = wechat()
   }
 }
 
+export interface ShareImageOptions {
+  /** 默认取当前环境的 wx，测试里可以塞假对象 */
+  wx?: WxLike | null
+  /** 微信拒了（图太大、路径无效、基础库太老等）时回调原因，界面上闪出来 */
+  onFail?: (reason: string) => void
+}
+
 /**
  * 截图分享：把一张本地图片丢进微信的「分享图片」弹窗（发送给朋友 / 收藏 / 下载）。
  * path 必须是本地路径或临时路径，一般来自 canvas.toTempFilePathSync()。
  * 基础库 2.14.3 起才有这个接口；返回 false 时调用方可以退回 shareToFriend({ imageUrl })。
  */
-export function shareImage(path: string, wx: WxLike | null = wechat()): boolean {
+export function shareImage(path: string, options: ShareImageOptions = {}): boolean {
+  const wx = options.wx === undefined ? wechat() : options.wx
   if (!wx || !path || typeof wx.showShareImageMenu !== 'function') return false
   try {
-    wx.showShareImageMenu({ path })
+    wx.showShareImageMenu({
+      path,
+      fail: (error: any) => options.onFail?.(String(error?.errMsg ?? 'showShareImageMenu 失败'))
+    })
     return true
-  } catch {
+  } catch (error) {
+    options.onFail?.(String(error))
     return false
   }
 }

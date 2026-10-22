@@ -8,7 +8,7 @@
  * - initShare 只装一次、菜单里同时打开「发送给朋友 / 分享到朋友圈」
  * - 右上角菜单回调拿到的卡片字段（朋友圈用 from=timeline，且只带朋友圈认识的字段）
  * - 游戏内主动转发只认识 title/imageUrl/query
- * - 截图分享走 wx.showShareImageMenu，老版本没接口时能退回 shareAppMessage({ imageUrl })
+ * - 截图分享走 wx.showShareImageMenu，老版本没接口时能退回 shareAppMessage({ imageUrl })；失败原因要能带回界面
  */
 
 import {
@@ -151,16 +151,29 @@ check('没有 shareAppMessage 时返回 false', shareToFriend({}, noShareApi), f
 console.log('\n六、截图分享')
 const { wx: wxC, calls: callsC } = fakeWx('3.0.0')
 initShare(wxC)
-check('截图分享调起来了', shareImage('/tmp/daozi-shot.png', wxC), true)
+check('截图分享调起来了', shareImage('/tmp/daozi-shot.png', { wx: wxC }), true)
 check('截图分享把临时路径交给微信', callsC.imageMenu?.path, '/tmp/daozi-shot.png')
-check('空路径不调微信', shareImage('', wxC), false)
+check('空路径不调微信', shareImage('', { wx: wxC }), false)
 
 const noImageMenu: any = { showShareMenu() {}, onShareAppMessage() {}, onShareTimeline() {}, shareAppMessage() {} }
-check('老版本没有 showShareImageMenu 时返回 false', shareImage('/tmp/daozi-shot.png', noImageMenu), false)
-check('没有 wx 时截图分享返回 false', shareImage('/tmp/daozi-shot.png', null), false)
+check('老版本没有 showShareImageMenu 时返回 false', shareImage('/tmp/daozi-shot.png', { wx: noImageMenu }), false)
+check('没有 wx 时截图分享返回 false', shareImage('/tmp/daozi-shot.png', { wx: null }), false)
 
 // 老版本退回转发卡片：图片当卡片图
 check('退回转发时把截图当卡片图', shareToFriend({ imageUrl: '/tmp/daozi-shot.png' }, noImageMenu), true)
+
+// 微信拒了（例如图太大 / 基础库太老）：fail 回调把 errMsg 带回来，界面上要能看见
+const failing: any = {
+  showShareMenu() {},
+  onShareAppMessage() {},
+  onShareTimeline() {},
+  showShareImageMenu(options: any) {
+    options.fail?.({ errMsg: 'showShareImageMenu:fail path is invalid' })
+  }
+}
+let failureReason = ''
+check('分享被拒时返回 true（接口已调起）', shareImage('/tmp/daozi-shot.png', { wx: failing, onFail: r => (failureReason = r) }), true)
+check('分享被拒时把 errMsg 交给回调', failureReason, 'showShareImageMenu:fail path is invalid')
 
 /* ------------------------------------------------------------------ */
 console.log('\n' + '='.repeat(72))
