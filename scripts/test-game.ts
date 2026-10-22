@@ -50,6 +50,20 @@ function ready(hands: Tile[][], piles: Tile[][], shortages: string[]): HandState
   return state
 }
 
+// 庄家 = 掷骰子的人（rollerSeat）；存档每次都要把它带回来，否则读档后庄家会变回 0 号位
+{
+  let match = createMatch({ rollerSeat: 2 })
+  match = startHand(match, 3, 4)
+  const hand = match.current as HandState
+  check('庄家跟着 rollerSeat', hand.dealerSeat, 2)
+  const restoredHand = JSON.parse(JSON.stringify(hand)) as HandState
+  check('存档往返后这把的庄家不变', restoredHand.dealerSeat, 2)
+  const restoredMatch = JSON.parse(JSON.stringify(match)) as MatchState
+  check('存档往返后 rollerSeat 不变', restoredMatch.rollerSeat, 2)
+  const next = startHand({ ...restoredMatch, current: null }, 1, 1)
+  check('续下一把时庄家仍是 2 号位', (next.current as HandState).dealerSeat, 2)
+}
+
 // 定缺阶段四家各自选，不受「轮到谁」限制（UI 靠这个决定显不显示 缺万/缺筒/缺条 按钮）
 {
   const state = createHand({ diceA: 2, diceB: 6, seed: 7 })

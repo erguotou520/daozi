@@ -2592,10 +2592,11 @@ export class TableView {
       })
     )
 
+    const resumable = !!loadSavedGame()?.board
     const button = makeButton({
       width: this.u(150),
       height: this.u(38),
-      label: '掷骰子',
+      label: resumable ? '继续上局' : '掷骰子',
       fontSize: this.u(14),
       face: 'tile',
       onClick: () => this.start()
@@ -2694,6 +2695,19 @@ export class TableView {
     this.roundStats = createHistory()
     this.aiPending = false
     this.actionLockUntil = 0
+    // 退出时选了「保存」：从存档接着打，不能新建一局
+    // （新建 = createMatch({ rollerSeat: 0 })，庄家会变回自己）
+    if (!this.board) {
+      const saved = loadSavedGame()
+      if (saved && saved.board) {
+        this.restoreGame(saved)
+        if (this.phase === 'playing' || this.phase === 'round-over') {
+          this.render()
+          if (this.phase === 'playing') this.schedule(420, () => this.tick())
+          return
+        }
+      }
+    }
     this.rollAndDeal()
   }
 
