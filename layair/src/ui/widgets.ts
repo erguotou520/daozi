@@ -415,3 +415,81 @@ export class DiceView extends Laya.Sprite {
     }
   }
 }
+
+/* ------------------------------------------------------------------ *
+ * 图标：分享 / 声音
+ *
+ * 右上角这几个按钮原来是「享 / 音 / 静」几个汉字，现在改成矢量图标：
+ * 全部按 0~1 的比例画在 size × size 的方块里，所以 30 逻辑像素和 57 像素都清楚。
+ * ------------------------------------------------------------------ */
+
+/** 分享：三个节点 + 两条连线（微信 / 安卓常见的分享符号） */
+export function drawShareGlyph(g: Laya.Graphics, size: number, color: string) {
+  const line = Math.max(1.2, size * 0.055)
+  const radius = size * 0.095
+  const hubX = size * 0.28
+  const hubY = size * 0.5
+  const topX = size * 0.72
+  const topY = size * 0.25
+  const botX = size * 0.72
+  const botY = size * 0.75
+  g.drawLine(hubX, hubY, topX, topY, color, line)
+  g.drawLine(hubX, hubY, botX, botY, color, line)
+  g.drawCircle(hubX, hubY, radius, color)
+  g.drawCircle(topX, topY, radius, color)
+  g.drawCircle(botX, botY, radius, color)
+}
+
+/**
+ * 一段圆弧，只描边。
+ * 没用 Graphics.drawPath / arcTo：在小尺寸下把弧拆成几段直线更稳，也不会被某些
+ * 渲染路径丢掉；段数够多，30 像素的图标上看不出棱角。
+ */
+function strokeArc(
+  g: Laya.Graphics,
+  cx: number,
+  cy: number,
+  radius: number,
+  spread: number,
+  color: string,
+  lineWidth: number,
+  segments = 6
+) {
+  let prevX = 0
+  let prevY = 0
+  for (let i = 0; i <= segments; i += 1) {
+    const angle = -spread + (2 * spread * i) / segments
+    const x = cx + radius * Math.cos(angle)
+    const y = cy + radius * Math.sin(angle)
+    if (i > 0) g.drawLine(prevX, prevY, x, y, color, lineWidth)
+    prevX = x
+    prevY = y
+  }
+}
+
+/** 声音：喇叭 + 两道声波；静音时喇叭上压一道斜杠 */
+export function drawSpeakerGlyph(g: Laya.Graphics, size: number, color: string, muted: boolean, mutedColor: string) {
+  const poly: number[] = []
+  for (const [x, y] of [
+    [0.18, 0.39],
+    [0.31, 0.39],
+    [0.48, 0.21],
+    [0.48, 0.79],
+    [0.31, 0.61],
+    [0.18, 0.61]
+  ]) {
+    poly.push(x * size, y * size)
+  }
+  g.drawPoly(0, 0, poly, color)
+
+  if (muted) {
+    const lineWidth = Math.max(1.6, size * 0.065)
+    g.drawLine(size * 0.56, size * 0.32, size * 0.86, size * 0.68, mutedColor, lineWidth)
+    g.drawLine(size * 0.86, size * 0.32, size * 0.56, size * 0.68, mutedColor, lineWidth)
+    return
+  }
+
+  const lineWidth = Math.max(1.4, size * 0.058)
+  strokeArc(g, size * 0.49, size * 0.5, size * 0.15, 0.62, color, lineWidth)
+  strokeArc(g, size * 0.49, size * 0.5, size * 0.27, 0.62, color, lineWidth)
+}

@@ -8,6 +8,7 @@
  * - initShare 只装一次、菜单里同时打开「发送给朋友 / 分享到朋友圈」
  * - 右上角菜单回调拿到的卡片字段（朋友圈用 from=timeline，且只带朋友圈认识的字段）
  * - 游戏内主动转发只认识 title/imageUrl/query
+ * - 截图分享走 wx.showShareImageMenu，老版本没接口时能退回 shareAppMessage({ imageUrl })
  */
 
 import {
@@ -21,6 +22,7 @@ import {
   initShare,
   isWechatMiniGame,
   setShareCard,
+  shareImage,
   shareToFriend,
   supportsTimeline
 } from '../layair/src/ui/share'
@@ -45,6 +47,7 @@ function fakeWx(sdk = '2.12.0', withTimeline = true) {
     friendListener?: () => any
     timelineListener?: () => any
     shared?: any
+    imageMenu?: any
   } = {}
   const wx: any = {
     showShareMenu(options: any) {
@@ -55,6 +58,9 @@ function fakeWx(sdk = '2.12.0', withTimeline = true) {
     },
     shareAppMessage(options: any) {
       calls.shared = options
+    },
+    showShareImageMenu(options: any) {
+      calls.imageMenu = options
     }
   }
   if (withTimeline) {
@@ -140,6 +146,21 @@ check('临时标题生效', callsB.shared?.title, '临时标题')
 
 const noShareApi: any = { showShareMenu() {}, onShareAppMessage() {}, onShareTimeline() {} }
 check('没有 shareAppMessage 时返回 false', shareToFriend({}, noShareApi), false)
+
+/* ------------------------------------------------------------------ */
+console.log('\n六、截图分享')
+const { wx: wxC, calls: callsC } = fakeWx('3.0.0')
+initShare(wxC)
+check('截图分享调起来了', shareImage('/tmp/daozi-shot.png', wxC), true)
+check('截图分享把临时路径交给微信', callsC.imageMenu?.path, '/tmp/daozi-shot.png')
+check('空路径不调微信', shareImage('', wxC), false)
+
+const noImageMenu: any = { showShareMenu() {}, onShareAppMessage() {}, onShareTimeline() {}, shareAppMessage() {} }
+check('老版本没有 showShareImageMenu 时返回 false', shareImage('/tmp/daozi-shot.png', noImageMenu), false)
+check('没有 wx 时截图分享返回 false', shareImage('/tmp/daozi-shot.png', null), false)
+
+// 老版本退回转发卡片：图片当卡片图
+check('退回转发时把截图当卡片图', shareToFriend({ imageUrl: '/tmp/daozi-shot.png' }, noImageMenu), true)
 
 /* ------------------------------------------------------------------ */
 console.log('\n' + '='.repeat(72))

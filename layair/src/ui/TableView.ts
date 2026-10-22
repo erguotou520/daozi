@@ -29,7 +29,7 @@ import { ROUNDS_PER_CIRCLE, dealTrace, seatFromDice } from '../game/table'
 import { createMatch, endHand, startHand, STARTING_POINTS, type MatchState } from '../game/match'
 import { meldTiles, parseTile, tileOrder, type Meld, type NumberSuit, type Tile } from '../game/score'
 import { COLORS, FONT_SERIF, SEAT_NAMES, TILE_FACE_RATIO, TILE_RATIO } from './theme'
-import { DiceView, makeButton, makePanel, makeText, makeWallStack, TileView } from './widgets'
+import { DiceView, drawShareGlyph, drawSpeakerGlyph, makeButton, makePanel, makeText, makeWallStack, TileView } from './widgets'
 import { Table3D } from './Table3D'
 import { voice } from '../audio/voice'
 import {
@@ -42,16 +42,7 @@ import {
   type HistoryState,
   type SavedGame
 } from './storage'
-import {
-  DEFAULT_SHARE_TITLE,
-  SHARE_QUERY_FRIEND,
-  TIMELINE_MIN_VERSION,
-  initShare,
-  isWechatMiniGame,
-  setShareCard,
-  shareToFriend,
-  supportsTimeline
-} from './share'
+import { DEFAULT_SHARE_TITLE, SHARE_QUERY_FRIEND, initShare, isWechatMiniGame, setShareCard, shareImage, shareToFriend } from './share'
 
 const STACKS = 17
 const PER_LINE = 13
@@ -191,8 +182,6 @@ export class TableView {
   private statsTab: 'round' | 'total' = 'round'
   private showStats = false
   private showExit = false
-  /** 分享面板：发给好友 / 朋友圈入口 */
-  private showShare = false
   /** 出牌/操作后的 300ms 输入锁：这期间点什么都不响应 */
   private actionLockUntil = 0
   /** AI 正在「思考」：避免重复排程 */
@@ -2050,6 +2039,16 @@ export class TableView {
       )
       items.push(
         makeButton({
+          width: this.u(52),
+          height: this.u(26),
+          label: '分享',
+          fontSize: this.u(10),
+          face: 'chip',
+          onClick: () => this.shareScreenshot()
+        })
+      )
+      items.push(
+        makeButton({
           width: this.u(42),
           height: this.u(26),
           label: '退出',
@@ -2715,7 +2714,6 @@ export class TableView {
     this.notice = null
     this.showStats = false
     this.showExit = false
-    this.showShare = false
     this.roundSummary = null
     this.roundStats = createHistory()
     this.aiPending = false
@@ -2804,7 +2802,7 @@ export class TableView {
   private tick() {
     const hand = this.hand
     if (!hand || this.phase !== 'playing') return
-    if (this.showStats || this.showExit || this.showShare) return
+    if (this.showStats || this.showExit) return
     if (hand.phase === 'over') {
       // 自动模式下自己点「下一把」，方便整局跑通验收
       if (AUTO && !this.autoCloseScheduled) {
@@ -2852,7 +2850,7 @@ export class TableView {
     this.schedule(this.aiThinkDelay(), () => {
       this.aiPending = false
       const current = this.hand
-      if (!current || this.phase !== 'playing' || this.showStats || this.showExit || this.showShare) return
+      if (!current || this.phase !== 'playing' || this.showStats || this.showExit) return
       if (current.phase === 'over') return
       const who = this.currentActor(current)
       if (who === null) return
@@ -3028,7 +3026,7 @@ export class TableView {
   }
 
   private requestStats() {
-    if (this.showStats || this.showExit || this.showShare) return
+    if (this.showStats || this.showExit) return
     this.clearTimers()
     this.showStats = true
     this.render()
@@ -3041,34 +3039,55 @@ export class TableView {
     this.render()
   }
 
-  private requestShare() {
-    if (this.showShare || this.showStats || this.showExit) return
-    // 非微信环境（浏览器 / IDE 预览）没有转发能力，加 ?share=1 才给看面板
-    if (!isWechatMiniGame() && !this.sharePreview) {
-      this.flash('分享只在微信小游戏里可用')
+  /**
+   * 截图分享：右上角分享图标、一把结束后的「分享」按钮都走这里。
+   * 先把当前画面截成一张图，再丢进微信的「分享图片」弹窗，直接把牌桌发出去。
+   * 小程序本身的分享（右上角菜单里的发送给朋友 / 分享到朋友圈）另走 initShare，互不影响。
+   */
+  private shareScreenshot() {
+    // 浏览器 / IDE 预览没有截图分享能力（?share=1 只是把图标画出来看版式）
+    if (!isWechatMiniGame()) {
+      this.flash('截图分享只在微信小游戏里可用')
       return
     }
-    this.clearTimers()
-    this.showShare = true
-    this.render()
+    const path = this.captureScreenshot()
+    if (!path) {
+      this.flash('这张没截成，再点一次试试')
+      return
+    }
+    // 微信「分享图片」弹窗：发送给朋友 / 收藏 / 下载；基础库 2.14.3 以前没有这个接口
+    if (!shareImage(path)) shareToFriend({ imageUrl: path })
   }
 
-  /** 分享面板里点「发给好友」：先把自己这块面板收掉，再拉起选择聊天界面 */
-  private shareToWechatFriend() {
-    this.showShare = false
-    this.render()
-    // 不传 imageUrl 时微信拿当前画面当卡片图，所以等一帧干净的牌桌再拉转发
-    this.schedule(60, () => {
-      const ok = shareToFriend()
-      if (!ok) this.flash('没调起转发，点右上角「···」也能发给好友')
-    })
-    if (this.phase === 'playing') this.schedule(320, () => this.tick())
+  /**
+   * 把当前画面截成一张本地临时图，返回微信能用的路径（浏览器 / IDE 预览里返回 null）。
+   * 用 Laya 自己的 drawToCanvas：它把舞台额外渲一遍到 RenderTexture 再 readPixels，
+   * 所以不依赖 WebGL 的 preserveDrawingBuffer（LayaAir 默认是关的，直接 canvas.toTempFilePath
+   * 有概率截到空白）。
+   */
+  private captureScreenshot(): string | null {
+    try {
+      // 尺寸必须用「屏幕」大小而不是 stage 设计尺寸：drawToCanvas 走的是 on-screen
+      // 那条渲染路径（prepareOSR），传 1334×750 这类设计尺寸会 RangeError: offset is out of bounds。
+      const width = Laya.Browser.clientWidth || Laya.stage.width
+      const height = Laya.Browser.clientHeight || Laya.stage.height
+      const shot: any = (Laya.stage as any).drawToCanvas(width, height, 0, 0)
+      const canvas: any = shot?.source ?? shot
+      if (!canvas || typeof canvas.toTempFilePathSync !== 'function') return null
+      const shotWidth = canvas.width || width
+      const shotHeight = canvas.height || height
+      // 宽给到 1000：聊天里够清楚，又不至于让临时文件太大
+      const destWidth = 1000
+      const destHeight = Math.round((destWidth * shotHeight) / shotWidth)
+      return canvas.toTempFilePathSync({ x: 0, y: 0, width: shotWidth, height: shotHeight, destWidth, destHeight }) ?? null
+    } catch {
+      return null
+    }
   }
 
   private closeOverlay() {
     this.showStats = false
     this.showExit = false
-    this.showShare = false
     this.render()
     if (this.phase === 'playing') this.schedule(300, () => this.tick())
   }
@@ -3088,7 +3107,7 @@ export class TableView {
 
   private renderHistoryIcon() {
     if (this.phase !== 'idle' && this.phase !== 'playing') return
-    if (this.showStats || this.showExit || this.showShare) return
+    if (this.showStats || this.showExit) return
     const size = this.u(30)
     if (size < 18) return
     const icon = new Laya.Sprite()
@@ -3112,10 +3131,10 @@ export class TableView {
     this.content.addChild(icon)
   }
 
-  /** 右上角语音开关：音 / 静 */
+  /** 右上角语音开关：喇叭图标，静音时喇叭上压一道叉 */
   private renderVoiceIcon() {
     if (this.phase !== 'idle' && this.phase !== 'playing') return
-    if (this.showStats || this.showExit || this.showShare) return
+    if (this.showStats || this.showExit) return
     const size = this.u(30)
     if (size < 18) return
     const on = voice.enabled
@@ -3135,17 +3154,7 @@ export class TableView {
       on ? 'rgba(217,180,95,0.55)' : 'rgba(201,120,86,0.6)',
       1
     )
-    icon.addChild(
-      makeText(on ? '音' : '静', {
-        size: Math.round(size * 0.46),
-        color: on ? COLORS.brass : COLORS.warn,
-        bold: true,
-        align: 'center',
-        valign: 'middle',
-        width: size,
-        height: size
-      })
-    )
+    drawSpeakerGlyph(icon.graphics, size, on ? COLORS.brass : COLORS.warn, !on, COLORS.warn)
     icon.hitArea = new Laya.Rectangle(0, 0, size, size)
     icon.mouseEnabled = true
     icon.on(Laya.Event.CLICK, null, () => {
@@ -3163,7 +3172,7 @@ export class TableView {
    */
   private renderShareIcon() {
     if (this.phase !== 'idle' && this.phase !== 'playing') return
-    if (this.showStats || this.showExit || this.showShare) return
+    if (this.showStats || this.showExit) return
     if (!isWechatMiniGame() && !this.sharePreview) return
     const size = this.u(30)
     if (size < 18) return
@@ -3171,20 +3180,10 @@ export class TableView {
     icon.size(size, size)
     const r = Math.max(4, Math.round(size * 0.24))
     icon.graphics.drawRoundRect(0, 0, size, size, r, r, r, r, 'rgba(9,33,27,0.9)', 'rgba(217,180,95,0.55)', 1)
-    icon.addChild(
-      makeText('享', {
-        size: Math.round(size * 0.46),
-        color: COLORS.brass,
-        bold: true,
-        align: 'center',
-        valign: 'middle',
-        width: size,
-        height: size
-      })
-    )
+    drawShareGlyph(icon.graphics, size, COLORS.brass)
     icon.hitArea = new Laya.Rectangle(0, 0, size, size)
     icon.mouseEnabled = true
-    icon.on(Laya.Event.CLICK, null, () => this.requestShare())
+    icon.on(Laya.Event.CLICK, null, () => this.shareScreenshot())
     icon.pos(this.m.boardW - size * 2 - this.u(14), this.u(8))
     this.content.addChild(icon)
   }
@@ -3215,7 +3214,6 @@ export class TableView {
     this.renderNotice()
     if (this.showStats) this.renderStatsPanel()
     if (this.showExit) this.renderExitPanel()
-    if (this.showShare) this.renderSharePanel()
   }
 
   /** 顶部临时提示（三打一翻牌等），压在其他弹窗下面 */
@@ -3465,7 +3463,6 @@ export class TableView {
     this.declinedWin = false
     this.showStats = false
     this.showExit = false
-    this.showShare = false
     this.phase = 'idle'
     this.board = null
     this.hand = null
@@ -3476,101 +3473,6 @@ export class TableView {
     this.dealtCounts = [0, 0, 0, 0]
     this.roundSummary = null
     this.render()
-  }
-
-  /**
-   * 分享面板。
-   * 好友：可以在这里直接拉起选择聊天界面（wx.shareAppMessage）；
-   * 朋友圈：小游戏里没有主动接口，只能提示玩家点右上角「···」。
-   */
-  private renderSharePanel() {
-    const m = this.m
-    this.overlayDim()
-    const panelW = Math.round(Math.min(m.W * 0.86, this.u(400)))
-    const panelH = this.u(210)
-    const px = Math.round((m.W - panelW) / 2)
-    const py = Math.round((m.H - panelH) / 2)
-    const panel = makePanel(panelW, panelH, this.u(16), 'rgba(9,34,27,0.98)', 'rgba(217,180,95,0.42)', 1.5)
-    panel.pos(px, py)
-    this.overlay.addChild(panel)
-
-    this.overlay.addChild(
-      makeText('分享倒子麻将', {
-        size: this.u(18),
-        color: COLORS.brass,
-        bold: true,
-        font: FONT_SERIF,
-        align: 'center',
-        width: panelW,
-        height: this.u(28),
-        x: px,
-        y: py + this.u(14)
-      })
-    )
-    this.overlay.addChild(
-      makeText('缺一门，可碰可杠不可吃 · 三家电脑陪你打', {
-        size: this.u(12),
-        color: COLORS.ivory,
-        align: 'center',
-        width: panelW - this.u(20),
-        height: this.u(20),
-        x: px + this.u(10),
-        y: py + this.u(52)
-      })
-    )
-
-    const inWechat = isWechatMiniGame()
-    const timeline = supportsTimeline()
-    const hint = inWechat
-      ? timeline
-        ? '朋友圈：点右上角「···」→「分享到朋友圈」'
-        : `朋友圈要安卓微信 + 基础库 ≥ ${TIMELINE_MIN_VERSION}，当前版本只能发给好友`
-      : '浏览器预览：真机里才有「发给好友」和右上角朋友圈菜单'
-    this.overlay.addChild(
-      makeText(hint, {
-        size: this.u(11),
-        color: inWechat && !timeline ? COLORS.warn : COLORS.mist,
-        align: 'center',
-        width: panelW - this.u(20),
-        height: this.u(20),
-        x: px + this.u(10),
-        y: py + this.u(76)
-      })
-    )
-    this.overlay.addChild(
-      makeText('转发卡片用当前牌桌画面，不用另外挑图', {
-        size: this.u(10),
-        color: COLORS.mist,
-        align: 'center',
-        width: panelW - this.u(20),
-        height: this.u(18),
-        x: px + this.u(10),
-        y: py + this.u(100)
-      })
-    )
-
-    const by = py + panelH - this.u(52)
-    const friend = makeButton({
-      width: this.u(140),
-      height: this.u(34),
-      label: '发给好友',
-      fontSize: this.u(12),
-      face: 'tile',
-      onClick: () => this.shareToWechatFriend()
-    })
-    friend.pos(Math.round(px + panelW / 2 - this.u(160)), by)
-    this.overlay.addChild(friend)
-
-    const close = makeButton({
-      width: this.u(110),
-      height: this.u(34),
-      label: '关闭',
-      fontSize: this.u(11),
-      face: 'chip',
-      onClick: () => this.closeOverlay()
-    })
-    close.pos(Math.round(px + panelW / 2 + this.u(20)), by)
-    this.overlay.addChild(close)
   }
 
   /* ------------------------------------------------------------------ *

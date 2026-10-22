@@ -1,5 +1,12 @@
 /**
- * 倒子麻将 · 微信小游戏分享（转发给好友 / 分享到朋友圈）
+ * 倒子麻将 · 微信小游戏分享
+ *
+ * 两条路线，互不冲突：
+ * - **小程序本身的分享**（右上角菜单）：`wx.showShareMenu` 打开「发送给朋友 / 分享到朋友圈」，
+ *   卡片内容由 `wx.onShareAppMessage` / `wx.onShareTimeline` 提供。
+ * - **游戏内的截图分享**（右上角分享图标、一把结束后的分享按钮）：
+ *   把当前画面截成一张图（`Laya.stage.drawToCanvas` → `canvas.toTempFilePathSync`），
+ *   丢进 `wx.showShareImageMenu` 的「分享图片」弹窗，直接发图给好友。
  *
  * LayaAir 3.x 的微信小游戏适配库（`libs/laya.adapter-weixin.js`）只把 `wx` 挂到
  * `Laya.PAL.g`，并不封装转发；分享得按微信官方文档直接用 `wx` 的接口：
@@ -9,18 +16,19 @@
  *    必须先调这个接口，菜单里才会出现「发送给朋友 / 分享到朋友圈」。
  * 2. `wx.onShareAppMessage` / `wx.onShareTimeline` 只负责「用户点右上角菜单时」
  *    返回卡片标题和图片；主动分享不能用这两个接口。
- * 3. 游戏内「发给好友」用 `wx.shareAppMessage` 主动拉起选择聊天界面；
- *    朋友圈没有对应的主动接口（官方原话：不支持在小游戏内直接发起分享），
- *    只能在游戏里提示玩家点右上角「···」。
- * 4. 不传 `imageUrl` 时微信拿当前游戏画面当卡片图（转发卡片 5:4，
- *    朋友圈预览图默认也是游戏画面截图），所以这里不额外打包分享图。
+ * 3. 游戏内按钮走 `wx.showShareImageMenu({ path })`（基础库 2.14.3+），弹「分享图片」面板；
+ *    老版本没有这个接口时退回 `wx.shareAppMessage({ imageUrl: path })`。
+ * 4. 朋友圈没有主动接口（官方原话：不支持在小游戏内直接发起分享），只能走右上角菜单。
+ * 5. 不传 `imageUrl` 时微信拿当前游戏画面当卡片图（转发卡片 5:4，
+ *    朋友圈预览图默认也是游戏画面截图）。
  *
- * 所以这个模块只做三件事：开菜单、挂卡片、主动转发；
- * 具体标题由牌桌按当前局面拼（见 TableView#shareTitle）。
+ * 这个文件只负责调微信接口，不依赖 Laya，可以在 Node 里直接测；
+ * 截图本身由 TableView 负责（要用 Laya 的渲染接口）。
  *
  * 参考：
  * - 转发 https://developers.weixin.qq.com/minigame/dev/guide/open-ability/share/share.html
  * - 分享到朋友圈 https://developers.weixin.qq.com/minigame/dev/guide/open-ability/share-timeline_game.html
+ * - wx.showShareImageMenu https://developers.weixin.qq.com/minigame/dev/api/share/wx.showShareImageMenu.html
  * - wx.onShareTimeline https://developers.weixin.qq.com/minigame/dev/api/share/wx.onShareTimeline.html
  */
 
@@ -42,6 +50,7 @@ export interface WxLike {
   onShareAppMessage?: (listener: () => ShareCard) => void
   onShareTimeline?: (listener: () => ShareCard) => void
   shareAppMessage?: (options: ShareCard) => void
+  showShareImageMenu?: (options: { path: string }) => void
   getAppBaseInfo?: () => { SDKVersion?: string }
   getSystemInfoSync?: () => { SDKVersion?: string }
 }
@@ -170,6 +179,21 @@ export function shareToFriend(next: ShareCard = {}, wx: WxLike | null = wechat()
   if (!wx || typeof wx.shareAppMessage !== 'function') return false
   try {
     wx.shareAppMessage({ ...currentShareCard(), ...next })
+    return true
+  } catch {
+    return false
+  }
+}
+
+/**
+ * 截图分享：把一张本地图片丢进微信的「分享图片」弹窗（发送给朋友 / 收藏 / 下载）。
+ * path 必须是本地路径或临时路径，一般来自 canvas.toTempFilePathSync()。
+ * 基础库 2.14.3 起才有这个接口；返回 false 时调用方可以退回 shareToFriend({ imageUrl })。
+ */
+export function shareImage(path: string, wx: WxLike | null = wechat()): boolean {
+  if (!wx || !path || typeof wx.showShareImageMenu !== 'function') return false
+  try {
+    wx.showShareImageMenu({ path })
     return true
   } catch {
     return false
