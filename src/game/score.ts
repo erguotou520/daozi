@@ -127,6 +127,8 @@ export interface Rules {
     老小对: number
     三打一: number
     杠开: number
+    /** 枯只压：压当且成牌张是场上最后一张，额外加点（与压当的点数叠加） */
+    枯只压: number
   }
   /** 大拿：直接命中即大拿的牌型名 */
   bigWinPatterns: string[]
@@ -187,7 +189,8 @@ export const DEFAULT_RULES: Rules = {
     大吊车: 31,
     老小对: 5,
     三打一: 5,
-    杠开: 5
+    杠开: 5,
+    枯只压: 21
   },
   // 七对本身不是大拿，七对 + 四活 由 bigWinPairs（31 + 10）触发；双连号、双杠已不再是大拿
   bigWinPatterns: [
@@ -885,6 +888,18 @@ export function scoreHand(input: ScoreInput): ScoreResult {
     items.push({ name: '单吊', points: rules.patternPoints.单吊, count: 1, detail: '成牌张补将牌' })
   }
 
+  // 枯只压：压当（卡张/边张、只等这一张）成牌，且成牌张是场上最后一张。
+  // 点数是在压当之外**额外**加；摸子另算（接牌 1.5 大 / 自摸 3 大，两者互斥）。
+  const isKuZhiYa = isYaDang && (input.visibleWinTileCount ?? 0) >= 3
+  if (isKuZhiYa && enabled('枯只压')) {
+    items.push({
+      name: '枯只压',
+      points: rules.patternPoints.枯只压,
+      count: 1,
+      detail: '只等这一张，且该牌另外三张都已亮在桌上'
+    })
+  }
+
   // 老小对：同一门里同时有对 1 和对 9
   if (enabled('老小对') && a.laoXiaoDuiSuit) {
     items.push({
@@ -962,8 +977,6 @@ export function scoreHand(input: ScoreInput): ScoreResult {
 
   // —— 摸子 ——
   const moziItems: MoziItem[] = []
-  const isYaDangWait = a.winTileRole === 'middle' || a.winTileRole === 'edge'
-  const isKuZhiYa = a.winTileOnlyWait && isYaDangWait && (input.visibleWinTileCount ?? 0) >= 3
   if (isKuZhiYa && enabled('枯只压')) {
     const units = input.selfDraw ? rules.kuZhiYaMozi.selfDraw : rules.kuZhiYaMozi.deal
     moziItems.push({
