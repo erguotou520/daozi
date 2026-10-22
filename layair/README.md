@@ -115,9 +115,10 @@
 
 **实现要点**（LayaAir 的 wxgame 适配库只把 `wx` 挂到 `Laya.PAL.g`，不封装转发，所以直接用 `wx` 的接口）：
 
-1. `wx.showShareMenu({ withShareTicket: true, menus: ['shareAppMessage', 'shareTimeline'] })`
+1. `wx.showShareMenu({ menus: ['shareAppMessage', 'shareTimeline'] })`
    —— 小游戏右上角菜单里的「转发」**默认是灰的**、朋友圈默认不可分享，不调这个接口两者都用不了。
    游戏启动时（`TableView` 构造函数）就装好，同一环境只装一次。
+   不传 `withShareTicket`：设成 `true` 只能选一个聊天对象、转出去还不能二次转发，我们也不用 shareTicket 查群信息。
 2. `wx.onShareAppMessage` / `wx.onShareTimeline` 只负责「用户点右上角菜单」时返回卡片内容；
    朋友圈卡片额外带 `from=timeline`，转发卡片带 `from=share`，以后做邀请统计可以从
    `wx.getLaunchOptionsSync().query` 读到。

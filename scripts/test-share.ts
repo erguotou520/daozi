@@ -100,7 +100,7 @@ check('第一次 initShare 装上', initShare(wxA), true)
 check('同一个 wx 不重复注册', initShare(wxA), false)
 check('菜单打开 shareAppMessage', callsA.menu?.menus?.includes('shareAppMessage'), true)
 check('菜单打开 shareTimeline', callsA.menu?.menus?.includes('shareTimeline'), true)
-check('菜单带 withShareTicket', callsA.menu?.withShareTicket, true)
+check('菜单不限制只能选一个好友（不传 withShareTicket）', callsA.menu?.withShareTicket, undefined)
 check('注册了转发回调', typeof callsA.friendListener, 'function')
 check('注册了朋友圈回调', typeof callsA.timelineListener, 'function')
 

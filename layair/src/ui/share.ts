@@ -142,8 +142,9 @@ export function initShare(wx: WxLike | null = wechat()): boolean {
   if (!wx || installedOn === wx) return false
   installedOn = wx
   try {
-    // withShareTicket：从群聊卡片进来时能拿到 shareTicket 查群信息
-    wx.showShareMenu?.({ withShareTicket: true, menus: ['shareAppMessage', 'shareTimeline'] })
+    // 不传 withShareTicket：设成 true 只能选一个聊天对象、转出去还不能二次转发，
+    // 我们也不用 shareTicket 查群信息，放开多选更容易传播。
+    wx.showShareMenu?.({ menus: ['shareAppMessage', 'shareTimeline'] })
   } catch {
     // 旧基础库不认识 menus，忽略
   }
