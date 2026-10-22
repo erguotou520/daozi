@@ -16,7 +16,7 @@ import {
   type HandState,
   type RoundAction
 } from '@/game/game'
-import { dealTrace } from '@/game/table'
+import { ROUNDS_PER_CIRCLE, dealTrace, seatFromDice } from '@/game/table'
 import { STARTING_POINTS, createMatch, endHand, startHand, type MatchState } from '@/game/match'
 import { tileOrder, type NumberSuit, type Tile } from '@/game/score'
 import TileView, { WallLine } from './components/TileView'
@@ -31,6 +31,16 @@ const PACE = typeof window !== 'undefined' && new URLSearchParams(window.locatio
 
 type TablePhase = 'idle' | 'rolling' | 'dealing' | 'playing' | 'round-over'
 
+/** 四局调圈的结果（只在第 4、8…局结束时出现） */
+interface CircleSummary {
+  diceA: number
+  diceB: number
+  /** 掷骰的人：最后成牌的人 */
+  rollerSeat: number
+  /** 位置不动的那家（换座后的座位号） */
+  fixedSeat: number
+}
+
 /** 一局打完的总账 */
 interface RoundSummary {
   roundIndex: number
@@ -39,8 +49,10 @@ interface RoundSummary {
   money: number[]
   /** 局末各家剩余点数（有人为 0） */
   points: number[]
-  /** 跨局累计（元） */
+  /** 跨局累计（元）；调圈前的结果，账目仍按这一局坐的位置显示 */
   total: number[]
+  /** 四局调圈：谁掷的骰、谁位置不动 */
+  circle?: CircleSummary
 }
 
 const money = (value: number) => `${value > 0 ? '+' : ''}${Number(value.toFixed(1))}`
@@ -217,19 +229,42 @@ const TablePage = defineComponent({
       const roundMoney = match.money.map((value, seat) => value + (settlement?.moneyDelta[seat] ?? 0))
       const finalPoints = hand.players.map((player, seat) => player.points + (settlement?.pointDelta[seat] ?? 0))
 
+      // 四局调圈：第 4、8…局结束时，由最后成牌的人掷骰子。点数按 5=自己、6=下家、
+      // 7=对面、8=上家 指向的那家位置不动，其余三家按顺时针换位。
+      // 单机里自己会被转回 0 号位，所以看到的是三家电脑换位置、账目跟着人走。
+      const circleNeeded = !!settlement && settlement.gameOver && match.roundIndex % ROUNDS_PER_CIRCLE === 0
+      const circleDice = circleNeeded
+        ? { a: 1 + Math.floor(Math.random() * 6), b: 1 + Math.floor(Math.random() * 6) }
+        : null
+
       // 引擎每一步都返回新的 HandState，先把最新这把同步回局里再结账，
       // 否则 endHand 拿到的是发牌那一瞬间的旧对象（没有赢家），点数永远累不起来。
-      const closed = endHand({ ...match, current: hand }, { rotate: false })
+      const closed = endHand(
+        { ...match, current: hand },
+        circleDice ? { circleDiceSum: circleDice.a + circleDice.b } : { rotate: false }
+      )
       board.value = closed
 
       // 有人点数被付完 → 这一局结束，先把总账摆出来
       if (settlement && settlement.gameOver) {
+        const circle: CircleSummary | undefined =
+          circleDice && settlement.winnerSeat >= 0
+            ? {
+                diceA: circleDice.a,
+                diceB: circleDice.b,
+                rollerSeat: settlement.winnerSeat,
+                // 点数指向的那家（换座前看到的座位名）：换座时他家不动
+                fixedSeat: seatFromDice(settlement.winnerSeat, circleDice.a + circleDice.b)
+              }
+            : undefined
         roundSummary.value = {
           roundIndex,
           hands,
           money: roundMoney,
           points: finalPoints,
-          total: closed.totalMoney
+          // 调圈前结账：累计按这一局坐的位置显示，换过来的账目带到下一局
+          total: match.totalMoney.map((value, seat) => value + roundMoney[seat]),
+          circle
         }
         phase.value = 'round-over'
         return
@@ -775,6 +810,14 @@ const TablePage = defineComponent({
                           )}
                         </div>
 
+                        {/* 摸子：只要有就显示；本局没结束时先不折成钱 */}
+                        {win.score.mozi.units > 0 && (
+                          <div class="mt-1 px-3 text-[11px] leading-5 text-brass">
+                            摸子 {win.score.mozi.big} 大 + {win.score.mozi.small} 小
+                            {result?.gameOver ? ` · ${win.score.mozi.money} 元/家` : ''}
+                          </div>
+                        )}
+
                         {/* 四家点数变化 */}
                         <div class="mt-2 grid grid-cols-4 gap-1 px-3">
                           {[0, 1, 2, 3].map(seat => {
@@ -1049,6 +1092,21 @@ const TablePage = defineComponent({
                       <div class="mt-0.5 text-[11px] text-mist">
                         共 {summary.hands} 把 · 有人点数付完
                       </div>
+                      {summary.circle && (
+                        <div class="mt-1.5 rounded-lg px-2 py-1 text-[11px] leading-4" style={{ background: 'rgba(0, 0, 0, 0.26)' }}>
+                          <div class="flex items-center justify-center gap-1.5 text-brass">
+                            <Dice value={summary.circle.diceA} size="16px" />
+                            <Dice value={summary.circle.diceB} size="16px" />
+                            <span>
+                              四局调圈 · {SEAT_NAMES[summary.circle.rollerSeat]}掷骰 {summary.circle.diceA}+
+                              {summary.circle.diceB}={summary.circle.diceA + summary.circle.diceB}
+                            </span>
+                          </div>
+                          <div class="mt-0.5 text-mist">
+                            {SEAT_NAMES[summary.circle.fixedSeat]}位置不动，其余三家按顺时针换位
+                          </div>
+                        </div>
+                      )}
                     </div>
 
                     <div class="mt-2.5 space-y-1">

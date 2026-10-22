@@ -1,7 +1,7 @@
 /**
  * 倒子麻将 · 桌位与局数流程
  *
- * 负责：掷骰定东家/开牌墙、发牌顺序、每局头家轮转、四把调圈。
+ * 负责：掷骰定开牌墙、发牌顺序、东家轮转（成牌者坐东）、四局调圈。
  * 纯函数、无依赖，可直接配合 `scoreHand` 搭对局状态机。
  */
 
@@ -22,7 +22,7 @@ export function seatOffsetFromDice(sum: number): number {
   return (((sum - 5) % SEAT_COUNT) + SEAT_COUNT) % SEAT_COUNT
 }
 
-/** 骰子指向的绝对座位（相对于掷骰者） */
+/** 骰子指向的绝对座位（本把的开牌墙） */
 export function seatFromDice(rollerSeat: number, sum: number): number {
   return (rollerSeat + seatOffsetFromDice(sum)) % SEAT_COUNT
 }
@@ -31,24 +31,28 @@ export interface OpeningRoll {
   diceA: number
   diceB: number
   sum: number
-  /** 东家，同时也是头家 */
+  /** 东家：掷骰子的人（上一把成牌的人），骰子不改东家 */
   dealerSeat: number
-  /** 开牌墙：从这家门前开始抓牌 */
+  /** 开牌墙：骰子点数指向这家，从这家门前开始抓牌 */
   wallSeat: number
   /** 留墩数：取两颗骰子里较小的点数 */
   breakStacks: number
 }
 
-/** 掷两颗骰子开局 */
+/**
+ * 掷两颗骰子开局。
+ *
+ * **东家永远是掷骰子的人**（上一把成牌的人），骰子点数不改东家——
+ * 点数只决定从哪家门前开牌（`wallSeat`）和留几墩（`breakStacks`）。
+ */
 export function rollOpening(rollerSeat: number, diceA: number, diceB: number): OpeningRoll {
   const sum = diceA + diceB
-  const seat = seatFromDice(rollerSeat, sum)
   return {
     diceA,
     diceB,
     sum,
-    dealerSeat: seat,
-    wallSeat: seat,
+    dealerSeat: rollerSeat,
+    wallSeat: seatFromDice(rollerSeat, sum),
     breakStacks: Math.min(diceA, diceB)
   }
 }
@@ -156,15 +160,18 @@ export function handSize(seat: number, dealerSeat: number): number {
 }
 
 /* ------------------------------------------------------------------ *
- * 四把调圈
+ * 四局调圈
  * ------------------------------------------------------------------ */
 
 /**
- * 四把调圈：最后成牌的人掷骰子，点数指向的人**方位不动**，其余三人依次调换。
+ * 四局调圈：打满 4 **局**（不是 4 把）后，最后成牌的人掷骰子。
  *
- * 实现口径（若与实际不符很容易反过来）：自由座位按座位号升序循环后移一位。
- * 例：`seats = [0,1,2,3]`，掷骰指向座位 2 → 座位 2 不动，自由座位 [0,1,3]，
- * 结果是 `[3,0,2,1]`（座位 0 换成原来的 3 号，座位 1 换成原来的 0 号，座位 3 换成原来的 1 号）。
+ * 点数按「5=自己、6=下家、7=对面、8=上家」相对**掷骰者**数座位，
+ * 指向的那一家**位置不动**；其余三家按顺时针各自挪到下一个空位
+ * （空位＝除不动那家以外的三个座位）。
+ *
+ * 例：`seats = [0,1,2,3]`，1 号位（下家）掷 7 点 → 指向 3 号位（上家）不动，
+ * 自由座位按顺时针是 [0,1,2]：0→1、1→2、2→0，结果是 `[2,0,1,3]`。
  *
  * @param seats 座位号 → 玩家 id
  * @param rollerSeat 掷骰子的人（最后成牌的人）
@@ -173,11 +180,12 @@ export function handSize(seat: number, dealerSeat: number): number {
 export function rotateSeatsAfterRound(seats: number[], rollerSeat: number, diceSum: number): number[] {
   if (seats.length !== SEAT_COUNT) throw new Error(`座位数应为 ${SEAT_COUNT}`)
   const fixedSeat = seatFromDice(rollerSeat, diceSum)
-  const freeSeats = seats.map((_, seat) => seat).filter(seat => seat !== fixedSeat)
-  const occupants = freeSeats.map(seat => seats[seat])
+  // 除不动那家以外，按顺时针排好的三个空位
+  const freeSeats = Array.from({ length: SEAT_COUNT }, (_, seat) => seat).filter(seat => seat !== fixedSeat)
   const next = [...seats]
   freeSeats.forEach((seat, index) => {
-    next[seat] = occupants[(index - 1 + occupants.length) % occupants.length]
+    // 这一家按顺时针挪到下一个空位
+    next[freeSeats[(index + 1) % freeSeats.length]] = seats[seat]
   })
   return next
 }
@@ -191,7 +199,7 @@ export interface MatchState {
   seats: number[]
   /** 第几局，1 到 ROUNDS_PER_CIRCLE */
   round: number
-  /** 本局掷骰子的人（头家） */
+  /** 本局掷骰子的人（东家，上一把成牌的人） */
   rollerSeat: number
   /** 本局东家，-1 表示还没掷骰 */
   dealerSeat: number
@@ -205,7 +213,7 @@ export function createMatch(seats: number[] = [0, 1, 2, 3], rollerSeat = 0): Mat
   return { seats: [...seats], round: 1, rollerSeat, dealerSeat: -1, wallSeat: -1, breakStacks: 0 }
 }
 
-/** 本局掷骰：由头家掷，决定东家与开牌墙 */
+/** 本局掷骰：由东家掷，只定开牌墙与留墩，东家不变 */
 export function rollRound(state: MatchState, diceA: number, diceB: number): MatchState {
   const opening = rollOpening(state.rollerSeat, diceA, diceB)
   return {
@@ -221,13 +229,19 @@ export function isCircleEnd(state: MatchState): boolean {
   return state.round >= ROUNDS_PER_CIRCLE
 }
 
+/** 换座后某个玩家现在坐哪个座位（调圈后东家要跟着人走） */
+export function seatOfPlayer(seats: number[], playerId: number): number {
+  return seats.indexOf(playerId)
+}
+
 /**
- * 一局结束：赢家获得下一局掷骰子权。
+ * 一局结束：赢家获得下一局掷骰子权，也就是下一把的东家。
  *
  * 打满 `ROUNDS_PER_CIRCLE` 局时进入调圈：赢家掷骰子（传 `circleDiceSum`），
- * 点数指向的方位不动，其余人依次调换，局数重新从 1 开始。
+ * 点数指向的位置不动，其余人依次调换，局数重新从 1 开始；换座后掷骰权跟着赢家
+ * 到新座位。
  *
- * @param winnerSeat 本局成牌的人（没有成牌则传 -1，头家继续坐庄）
+ * @param winnerSeat 本局成牌的人（没有成牌则传 -1，东家连坐）
  */
 export function settleRound(state: MatchState, winnerSeat: number, circleDiceSum?: number): MatchState {
   const rollerSeat = winnerSeat >= 0 ? winnerSeat : state.rollerSeat
@@ -236,9 +250,13 @@ export function settleRound(state: MatchState, winnerSeat: number, circleDiceSum
   if (circleDiceSum === undefined) {
     throw new Error(`打满 ${ROUNDS_PER_CIRCLE} 局需要传 circleDiceSum 才能调圈`)
   }
+  const seats = rotateSeatsAfterRound(state.seats, rollerSeat, circleDiceSum)
+  // 换座以后赢家换了座位：掷骰权（也就是东家）跟着人走，不能留在旧座位上
+  const moved = seatOfPlayer(seats, state.seats[rollerSeat])
   return {
     ...base,
     round: 1,
-    seats: rotateSeatsAfterRound(state.seats, rollerSeat, circleDiceSum)
+    seats,
+    rollerSeat: moved >= 0 ? moved : rollerSeat
   }
 }

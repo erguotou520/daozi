@@ -1,0 +1,583 @@
+{
+  "voice": "zm_yunxi",
+  "sampleRate": 24000,
+  "phrases": [
+    {
+      "id": "wan1",
+      "text": "一万",
+      "group": "tile",
+      "tiers": [
+        1
+      ]
+    },
+    {
+      "id": "wan2",
+      "text": "二万",
+      "group": "tile",
+      "tiers": [
+        1
+      ]
+    },
+    {
+      "id": "wan3",
+      "text": "三万",
+      "group": "tile",
+      "tiers": [
+        1
+      ]
+    },
+    {
+      "id": "wan4",
+      "text": "四万",
+      "group": "tile",
+      "tiers": [
+        1
+      ]
+    },
+    {
+      "id": "wan5",
+      "text": "五万",
+      "group": "tile",
+      "tiers": [
+        1
+      ]
+    },
+    {
+      "id": "wan6",
+      "text": "六万",
+      "group": "tile",
+      "tiers": [
+        1
+      ]
+    },
+    {
+      "id": "wan7",
+      "text": "七万",
+      "group": "tile",
+      "tiers": [
+        1
+      ]
+    },
+    {
+      "id": "wan8",
+      "text": "八万",
+      "group": "tile",
+      "tiers": [
+        1
+      ]
+    },
+    {
+      "id": "wan9",
+      "text": "九万",
+      "group": "tile",
+      "tiers": [
+        1
+      ]
+    },
+    {
+      "id": "tong1",
+      "text": "一筒",
+      "group": "tile",
+      "tiers": [
+        1
+      ]
+    },
+    {
+      "id": "tong2",
+      "text": "二筒",
+      "group": "tile",
+      "tiers": [
+        1
+      ]
+    },
+    {
+      "id": "tong3",
+      "text": "三筒",
+      "group": "tile",
+      "tiers": [
+        1
+      ]
+    },
+    {
+      "id": "tong4",
+      "text": "四筒",
+      "group": "tile",
+      "tiers": [
+        1
+      ]
+    },
+    {
+      "id": "tong5",
+      "text": "五筒",
+      "group": "tile",
+      "tiers": [
+        1
+      ]
+    },
+    {
+      "id": "tong6",
+      "text": "六筒",
+      "group": "tile",
+      "tiers": [
+        1
+      ]
+    },
+    {
+      "id": "tong7",
+      "text": "七筒",
+      "group": "tile",
+      "tiers": [
+        1
+      ]
+    },
+    {
+      "id": "tong8",
+      "text": "八筒",
+      "group": "tile",
+      "tiers": [
+        1
+      ]
+    },
+    {
+      "id": "tong9",
+      "text": "九筒",
+      "group": "tile",
+      "tiers": [
+        1
+      ]
+    },
+    {
+      "id": "tiao1",
+      "text": "幺鸡！",
+      "group": "tile",
+      "tiers": [
+        1
+      ],
+      "label": "一条（幺鸡）"
+    },
+    {
+      "id": "tiao2",
+      "text": "二条",
+      "group": "tile",
+      "tiers": [
+        1
+      ]
+    },
+    {
+      "id": "tiao3",
+      "text": "三条",
+      "group": "tile",
+      "tiers": [
+        1
+      ]
+    },
+    {
+      "id": "tiao4",
+      "text": "四条",
+      "group": "tile",
+      "tiers": [
+        1
+      ]
+    },
+    {
+      "id": "tiao5",
+      "text": "五条",
+      "group": "tile",
+      "tiers": [
+        1
+      ]
+    },
+    {
+      "id": "tiao6",
+      "text": "六条",
+      "group": "tile",
+      "tiers": [
+        1
+      ]
+    },
+    {
+      "id": "tiao7",
+      "text": "七条",
+      "group": "tile",
+      "tiers": [
+        1
+      ]
+    },
+    {
+      "id": "tiao8",
+      "text": "八条",
+      "group": "tile",
+      "tiers": [
+        1
+      ]
+    },
+    {
+      "id": "tiao9",
+      "text": "九条",
+      "group": "tile",
+      "tiers": [
+        1
+      ]
+    },
+    {
+      "id": "east",
+      "text": "东风",
+      "group": "tile",
+      "tiers": [
+        1
+      ]
+    },
+    {
+      "id": "south",
+      "text": "南风",
+      "group": "tile",
+      "tiers": [
+        1
+      ]
+    },
+    {
+      "id": "west",
+      "text": "西风",
+      "group": "tile",
+      "tiers": [
+        1
+      ]
+    },
+    {
+      "id": "north",
+      "text": "北风",
+      "group": "tile",
+      "tiers": [
+        1
+      ]
+    },
+    {
+      "id": "red",
+      "text": "红中",
+      "group": "tile",
+      "tiers": [
+        1
+      ]
+    },
+    {
+      "id": "green",
+      "text": "发财",
+      "group": "tile",
+      "tiers": [
+        1
+      ]
+    },
+    {
+      "id": "white",
+      "text": "白板",
+      "group": "tile",
+      "tiers": [
+        1
+      ]
+    },
+    {
+      "id": "peng",
+      "text": "对！",
+      "group": "action",
+      "tiers": [
+        1
+      ],
+      "label": "对（碰）"
+    },
+    {
+      "id": "gang",
+      "text": "杠！",
+      "group": "action",
+      "tiers": [
+        1,
+        2
+      ]
+    },
+    {
+      "id": "angang",
+      "text": "暗杠！",
+      "group": "action",
+      "tiers": [
+        1,
+        2
+      ]
+    },
+    {
+      "id": "zimo",
+      "text": "自摸！",
+      "group": "action",
+      "tiers": [
+        1,
+        2,
+        3
+      ]
+    },
+    {
+      "id": "hu",
+      "text": "胡！",
+      "group": "action",
+      "tiers": [
+        1,
+        2,
+        3
+      ]
+    },
+    {
+      "id": "qianggang",
+      "text": "抢杠胡！",
+      "group": "action",
+      "tiers": [
+        1,
+        2,
+        3
+      ]
+    },
+    {
+      "id": "ting",
+      "text": "听牌！",
+      "group": "action",
+      "tiers": [
+        1
+      ]
+    },
+    {
+      "id": "liuju",
+      "text": "流局！",
+      "group": "action",
+      "tiers": [
+        1
+      ]
+    },
+    {
+      "id": "dana",
+      "text": "大拿！",
+      "group": "pattern",
+      "tiers": [
+        1,
+        2,
+        3
+      ]
+    },
+    {
+      "id": "kuzhiya",
+      "text": "枯枝压！",
+      "label": "枯只压",
+      "group": "pattern",
+      "tiers": [
+        1,
+        2,
+        3
+      ]
+    },
+    {
+      "id": "qingyise",
+      "text": "清一色！",
+      "group": "pattern",
+      "tiers": [
+        1,
+        2,
+        3
+      ]
+    },
+    {
+      "id": "duiduihu",
+      "text": "对对胡！",
+      "group": "pattern",
+      "tiers": [
+        1,
+        2,
+        3
+      ]
+    },
+    {
+      "id": "ganghousaihua",
+      "text": "杠后赛花！",
+      "group": "pattern",
+      "tiers": [
+        1,
+        2,
+        3
+      ]
+    },
+    {
+      "id": "sandayi",
+      "text": "三打一！",
+      "group": "pattern",
+      "tiers": [
+        1,
+        2,
+        3
+      ]
+    },
+    {
+      "id": "qidui",
+      "text": "七对！",
+      "group": "pattern",
+      "tiers": [
+        1,
+        2,
+        3
+      ]
+    },
+    {
+      "id": "dadiaoche",
+      "text": "大吊车！",
+      "group": "pattern",
+      "tiers": [
+        1,
+        2,
+        3
+      ]
+    },
+    {
+      "id": "laoxiaodui",
+      "text": "老小对！",
+      "group": "pattern",
+      "tiers": [
+        1,
+        2,
+        3
+      ]
+    },
+    {
+      "id": "lianhao",
+      "text": "连号！",
+      "group": "pattern",
+      "tiers": [
+        1,
+        2,
+        3
+      ]
+    },
+    {
+      "id": "bangbang",
+      "text": "棒棒！",
+      "group": "pattern",
+      "tiers": [
+        1,
+        2,
+        3
+      ]
+    },
+    {
+      "id": "sihuo",
+      "text": "四活！",
+      "group": "pattern",
+      "tiers": [
+        1,
+        2,
+        3
+      ]
+    },
+    {
+      "id": "budongshou",
+      "text": "不动手！",
+      "group": "pattern",
+      "tiers": [
+        1,
+        2,
+        3
+      ]
+    },
+    {
+      "id": "caoyise",
+      "text": "草一色！",
+      "group": "pattern",
+      "tiers": [
+        1,
+        2,
+        3
+      ]
+    },
+    {
+      "id": "yijiu",
+      "text": "一一九！",
+      "group": "pattern",
+      "tiers": [
+        1,
+        2,
+        3
+      ]
+    },
+    {
+      "id": "shuangtong",
+      "text": "双通！",
+      "group": "pattern",
+      "tiers": [
+        1,
+        2,
+        3
+      ]
+    },
+    {
+      "id": "shuangsihuo",
+      "text": "双四活！",
+      "group": "pattern",
+      "tiers": [
+        1,
+        2,
+        3
+      ]
+    },
+    {
+      "id": "sangang",
+      "text": "三杠！",
+      "group": "pattern",
+      "tiers": [
+        1,
+        2,
+        3
+      ]
+    },
+    {
+      "id": "sandakan",
+      "text": "三大坎！",
+      "group": "pattern",
+      "tiers": [
+        1,
+        2,
+        3
+      ]
+    },
+    {
+      "id": "qingshui",
+      "text": "清水！",
+      "group": "pattern",
+      "tiers": [
+        1,
+        2,
+        3
+      ]
+    },
+    {
+      "id": "yadang",
+      "text": "压当！",
+      "group": "pattern",
+      "tiers": [
+        1,
+        2,
+        3
+      ]
+    },
+    {
+      "id": "dandiao",
+      "text": "单吊！",
+      "group": "pattern",
+      "tiers": [
+        1,
+        2,
+        3
+      ]
+    },
+    {
+      "id": "gangkai",
+      "text": "杠开！",
+      "group": "pattern",
+      "tiers": [
+        1,
+        2,
+        3
+      ]
+    }
+  ]
+}

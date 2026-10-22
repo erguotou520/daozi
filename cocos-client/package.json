@@ -1,0 +1,14 @@
+{
+  "name": "daozi-mahjong",
+  "version": "1.0.0",
+  "description": "倒子麻将 - 安徽和县麻将 Cocos Creator 版",
+  "main": "",
+  "uuid": "daozi-mahjong-001",
+  "creator": {
+    "version": "3.8.8"
+  },
+  "scripts": {},
+  "devDependencies": {
+    "typescript": "^5.9.3"
+  }
+}

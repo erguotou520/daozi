@@ -8,10 +8,11 @@
     "build": "vue-tsc --noEmit && vite build",
     "dev": "vite",
     "preview": "vite preview",
-    "test": "pnpm test:score && pnpm test:game && pnpm test:gameplay",
+    "test": "pnpm test:score && pnpm test:game && pnpm test:gameplay && pnpm test:voice",
     "test:score": "node --import ./scripts/ts-resolve.mjs --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/test-score.ts",
     "test:game": "node --import ./scripts/ts-resolve.mjs --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/test-game.ts",
     "test:gameplay": "node --import ./scripts/ts-resolve.mjs --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/test-gameplay.ts",
+    "test:voice": "node --import ./scripts/ts-resolve.mjs --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/test-voice.ts",
     "stylint": "stylelint \"src/**/*.{css,less,scss,sass,styl}\" --fix"
   },
   "dependencies": {

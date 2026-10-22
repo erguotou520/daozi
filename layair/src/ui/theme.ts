@@ -2,7 +2,7 @@
  * 倒子麻将 · LayAir 主题
  *
  * 视觉沿用 web 端：深毡绿底、象牙牌面、黄铜描边、朱红印章。
- * 全部用 Canvas 矢量绘制，不依赖图片资源——微信小游戏包里也只有代码。
+ * 牌面用一张 92KB 的图集贴图（见 tileArt.ts），其它 UI 仍用 Canvas 矢量绘制。
  */
 
 export const COLORS = {
@@ -51,7 +51,13 @@ export const HONOR_COLOR: Record<string, string> = {
 export const FONT_SANS = 'PingFang SC, Microsoft YaHei, Heiti SC, sans-serif'
 export const FONT_SERIF = 'Songti SC, STSong, Noto Serif SC, SimSun, serif'
 
-/** 牌的高宽比（和 web 的 4.1 / 3 保持一致） */
-export const TILE_RATIO = 4.1 / 3
+/** 牌面（贴图）的高宽比：和牌面图集单格 128×176 完全一致，贴图才能 100% 铺满 */
+export const TILE_FACE_RATIO = 176 / 128
+
+/** 立牌顶部厚度带的厚度 / 牌宽；带内绿 30% + 白 70% */
+export const TILE_BAND_RATIO = 0.18
+
+/** 立牌整体的高宽比 = 牌面 + 顶部厚度带 */
+export const TILE_RATIO = TILE_FACE_RATIO + TILE_BAND_RATIO
 
 export const SEAT_NAMES = ['自己', '下家', '对面', '上家']

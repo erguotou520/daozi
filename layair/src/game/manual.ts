@@ -46,8 +46,8 @@ export const TONG_OPTIONS = [5, 6, 7, 8]
 export function extraOptions(rules: Rules = DEFAULT_RULES): ManualOption[] {
   const p = rules.patternPoints
   return [
-    { name: '压当', points: p.压当, hint: '成牌张补顺子中间缺口' },
-    { name: '单吊', points: p.单吊, hint: '成牌张补将牌' },
+    { name: '压当', points: p.压当, hint: '唯一成牌张补顺子缺口（卡张/边张）' },
+    { name: '单吊', points: p.单吊, hint: '唯一成牌张补将牌' },
     { name: '小连号', points: p.小连号, hint: '同一门连续六张' },
     { name: '大连号', points: p.大连号, hint: '同一门 1–9 齐张' },
     { name: '棒棒', points: p.棒棒, hint: '同一门连续三组对子' },
@@ -191,6 +191,10 @@ export function scoreManualSelection(
   const selectedMozi = moziTable.filter(option => selection.mozi.includes(option.name))
   for (const option of selectedMozi) add(option.name, option.points, 'mozi', option.hint)
 
+  // 清一色自带 1 个大摸子（和自摸/压当叠加）
+  const flushMozi = selection.bigWin.includes('清一色') ? rules.qingYiSeMozi : 0
+  if (flushMozi > 0) add('清一色', 0, 'mozi', `清一色自带 ${flushMozi} 个大摸子`)
+
   const subtotal = items.reduce((sum, item) => sum + item.points, 0)
   const multiplier = selectedMozi.some(option => option.doublesPoints) ? 2 : 1
   const total = subtotal * multiplier
@@ -204,7 +208,7 @@ export function scoreManualSelection(
   const isBigWin = bigWinReasons.length > 0
 
   // —— 摸子 ——
-  const rawUnits = selectedMozi.reduce((sum, option) => sum + option.units, 0)
+  const rawUnits = selectedMozi.reduce((sum, option) => sum + option.units, 0) + flushMozi
   const moziMultiplier = selectedMozi.some(option => option.doublesMozi) ? 2 : 1
   const moziUnits = rawUnits * moziMultiplier
   const moziBig = Math.floor(moziUnits)

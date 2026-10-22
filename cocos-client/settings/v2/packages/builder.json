@@ -1,0 +1,14 @@
+{
+  "web-mobile": {
+    "startScene": "b1a2b3c4-d5e6-4f7a-8b9c-0d1e2f3a4b5c",
+    "title": "倒子麻将"
+  },
+  "android": {
+    "packageName": "com.daozi.mahjong",
+    "startScene": "b1a2b3c4-d5e6-4f7a-8b9c-0d1e2f3a4b5c"
+  },
+  "ios": {
+    "bundleId": "com.daozi.mahjong",
+    "startScene": "b1a2b3c4-d5e6-4f7a-8b9c-0d1e2f3a4b5c"
+  }
+}

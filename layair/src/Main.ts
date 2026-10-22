@@ -1,4 +1,5 @@
 import { TableView } from './ui/TableView'
+import { tileArt } from './ui/tileArt'
 
 const { regClass } = Laya
 
@@ -6,19 +7,29 @@ const { regClass } = Laya
 export class Main extends Laya.Script {
     private view: TableView | null = null
     private applying = false
+    /** 牌面图集就绪后才建牌桌；加载失败也会置 true，用文字牌面兜底 */
+    private booted = false
+    private disposed = false
 
     onStart() {
-        this.applyLayout()
         Laya.stage.on(Laya.Event.RESIZE, this, this.onResize)
+        // 牌面图集只有 92KB，但必须先于第一张牌加载完，否则会先闪一帧文字牌面。
+        // 加载失败/超时由 tileArt 内部兜底，这里总会继续。
+        tileArt.load().then(() => {
+            if (this.disposed) return
+            this.booted = true
+            this.applyLayout()
+        })
     }
 
     onDestroy() {
+        this.disposed = true
         Laya.stage.off(Laya.Event.RESIZE, this, this.onResize)
         this.view = null
     }
 
     private onResize() {
-        if (this.applying) return
+        if (this.applying || !this.booted) return
         this.applyLayout()
     }
 

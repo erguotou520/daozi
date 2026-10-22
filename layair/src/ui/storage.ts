@@ -9,6 +9,7 @@
 
 const HISTORY_KEY = 'daozi.history.v1'
 const GAME_KEY = 'daozi.game.v1'
+const VOICE_KEY = 'daozi.voice.v1'
 
 export interface SeatHistory {
   wins: number
@@ -134,6 +135,17 @@ export function loadSavedGame(): SavedGame | null {
 
 export function saveGame(game: SavedGame) {
   writeRaw(GAME_KEY, game)
+}
+
+/** 语音默认开启；只有明确存过 false 才静音 */
+export function loadVoiceEnabled(): boolean {
+  const saved = readRaw(VOICE_KEY)
+  if (saved && typeof saved === 'object' && typeof saved.enabled === 'boolean') return saved.enabled
+  return true
+}
+
+export function saveVoiceEnabled(enabled: boolean) {
+  writeRaw(VOICE_KEY, { enabled })
 }
 
 export function clearAllData() {

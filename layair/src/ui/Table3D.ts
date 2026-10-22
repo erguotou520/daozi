@@ -3,6 +3,7 @@ import type { NumberSuit, Tile } from '../game/score'
 import { wallVisualOf } from '../game/game'
 import { meldTiles, parseTile, tileOrder } from '../game/score'
 import { COLORS, HONOR_COLOR, SUIT_COLOR } from './theme'
+import { tileArt, TILE_CELL_H, TILE_CELL_W } from './tileArt'
 
 /** 3D 手牌在屏幕上的可点击区域（相对牌桌 2D 根节点） */
 export interface TileHit {
@@ -23,7 +24,8 @@ export interface LastMark {
 }
 
 const TILE_W = 54
-const TILE_H = 78
+/** 牌高按牌面贴图的 128:176 反推，贴图才能 100% 铺满整个牌面、不被拉伸 */
+const TILE_H = (TILE_W * TILE_CELL_H) / TILE_CELL_W
 const TILE_T = 26
 /** 牌背玉绿：比桌面亮很多，扣着的牌从深绿桌面上跳出来 */
 const TILE_BACK = '#4CAF87'
@@ -384,8 +386,17 @@ export class Table3D {
     const cached = this.faceCache.get(key)
     if (cached) return cached
 
-    const w = 128
-    const h = 176
+    const w = TILE_CELL_W
+    const h = TILE_CELL_H
+    const art = tileArt.faceCanvas(tile, dim)
+    if (art) {
+      // 真实牌面：图集里的一整格（象牙底 + 牌面图案）直接做贴图
+      const tex = new Laya.Texture2D(w, h, Laya.TextureFormat.R8G8B8A8, false, false, true, false)
+      tex.setImageData(art, false, false)
+      this.faceCache.set(key, tex)
+      return tex
+    }
+
     const hc = new Laya.HTMLCanvas(true)
     hc.size(w, h)
     const ctx = hc.context
@@ -494,16 +505,17 @@ export class Table3D {
     )
     if (!tile) return group
 
-    // 牌面贴图贴在白身正面（局部 +z）；平躺时跟着整组一起翻到顶面
+    // 牌面贴图贴在白身正面（局部 +z）；整块和牌体同宽同高、同圆角，
+    // 从正面看不到白身留边。平躺时跟着整组一起翻到顶面。
     this.addRounded(
-      TILE_W - 1.5,
-      TILE_H - 1.5,
-      1.6,
+      TILE_W,
+      TILE_H,
       0.8,
+      2.2,
       this.faceMaterial(this.faceTexture(tile, dim)),
       0,
       0,
-      TILE_T / 2 + 0.8,
+      TILE_T / 2 + 0.5,
       body
     )
     if (highlight) this.addTileHighlight(group)
@@ -584,10 +596,14 @@ export class Table3D {
   }
 
   /** 平躺在明牌家手牌前面的红色「听」牌 */
-  private addListenPlaque(seat: number) {
-    const size = 42
-    const gap = 100
-    const x = seat === 3 ? -HAND_X_SIDE + gap : seat === 1 ? HAND_X_SIDE - gap : 0
+  private addListenPlaque(seat: number, tiles: Tile[]) {
+    const size = 54
+    // 对家的手牌在提示条后面，往前多放一点，别被提示条压住
+    const gap = seat === 2 ? 160 : 100
+    // 摆在手牌靠左/靠上的一端，避开中间的提示条
+    const step = Math.min(TILE_W - 0.4, 960 / Math.max(1, tiles.length))
+    const end = -((tiles.length - 1) * step) / 2
+    const x = seat === 3 ? -HAND_X_SIDE + gap : seat === 1 ? HAND_X_SIDE - gap : seat === 2 ? -end : end
     const z = seat === 0 ? HAND_Z_SELF - gap : seat === 2 ? HAND_Z_OPP + gap : 0
     const group = new Laya.Sprite3D()
     group.transform.position = new Laya.Vector3(x, TILE_T / 2 + 2, z)
@@ -913,7 +929,7 @@ export class Table3D {
       this.addDiscards(seat, player.discards)
     }
 
-    if (tenpaiSeat !== null) this.addListenPlaque(tenpaiSeat)
+    if (tenpaiSeat !== null) this.addListenPlaque(tenpaiSeat, hand.players[tenpaiSeat].hand)
 
     this.buildDice(dice, rolling)
   }

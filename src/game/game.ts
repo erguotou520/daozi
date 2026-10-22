@@ -129,7 +129,7 @@ export interface CreateHandOptions {
   /** 本局各家剩余点数（按座位索引） */
   points?: number[]
   aiSeats?: number[]
-  /** 掷骰子的人（头家） */
+  /** 掷骰子的人，同时是东家（上一把成牌的人） */
   rollerSeat?: number
   diceA: number
   diceB: number
@@ -338,7 +338,7 @@ export function createHand(options: CreateHandOptions): HandState {
   }
 
   state.logs.push(
-    `掷骰子 ${options.diceA}+${options.diceB}=${opening.sum}：${opening.dealerSeat} 号位做东家，从 ${opening.wallSeat} 号位开牌，留 ${opening.breakStacks} 墩。`
+    `掷骰子 ${options.diceA}+${options.diceB}=${opening.sum}：${opening.dealerSeat} 号位坐东，从 ${opening.wallSeat} 号位开牌，留 ${opening.breakStacks} 墩。`
   )
   return state
 }

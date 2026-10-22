@@ -1,0 +1,32 @@
+{
+  "compilerOptions": {
+    "target": "ES2015",
+    "module": "ES2015",
+    "lib": ["ES2015", "DOM"],
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "moduleResolution": "node",
+    "resolveJsonModule": true,
+    "declaration": false,
+    "sourceMap": false,
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": false,
+    "allowSyntheticDefaultImports": true,
+    "outDir": "./temp/declarations",
+    "baseUrl": ".",
+    "paths": {
+      "cc": ["./temp/declarations/cc", "./cc-stubs"],
+      "cc/env": ["./temp/declarations/cc/env"]
+    }
+  },
+  "include": [
+    "assets/**/*.ts",
+    "temp/declarations/**/*.d.ts",
+    "cc-stubs.d.ts"
+  ],
+  "exclude": [
+    "node_modules"
+  ]
+}

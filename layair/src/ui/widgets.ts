@@ -1,11 +1,22 @@
 /**
  * 倒子麻将 · LayAir 基础控件
  *
- * 牌、骰子、牌墙墩、文本与按钮。全部用 Graphics 矢量绘制 + Text，
- * 不引用任何图片资源，微信小游戏构建时不需要处理图集。
+ * 牌、骰子、牌墙墩、文本与按钮。牌面优先用图集里的真实牌面贴图，
+ * 图集未就绪时退回 Canvas 文字；其余控件仍用 Graphics 矢量绘制 + Text，
+ * 微信小游戏构建时只需要额外处理一张 92KB 的牌面图集。
  */
 
-import { COLORS, FONT_SANS, FONT_SERIF, HONOR_COLOR, SUIT_COLOR, TILE_RATIO } from './theme'
+import {
+  COLORS,
+  FONT_SANS,
+  FONT_SERIF,
+  HONOR_COLOR,
+  SUIT_COLOR,
+  TILE_BAND_RATIO,
+  TILE_FACE_RATIO,
+  TILE_RATIO
+} from './theme'
+import { tileArt } from './tileArt'
 
 export interface TextOpts {
   size: number
@@ -155,7 +166,8 @@ export class TileView extends Laya.Sprite {
   constructor(tile: string, opts: TileOpts) {
     super()
     const w = opts.width
-    const h = Math.round(w * TILE_RATIO)
+    // 平躺的明牌只看顶面，牌面比例就是贴图比例；立牌还要加一条顶部厚度带
+    const h = Math.round(w * (opts.flat ? TILE_FACE_RATIO : TILE_RATIO))
     this.w = w
     this.h = h
     this.size(w, h)
@@ -180,66 +192,87 @@ export class TileView extends Laya.Sprite {
   }
 
   /**
-   * 立着的牌（手牌 / 对家牌背）。
-   * 顶面是一条向后收窄的梯形，正面在下方，右侧留一条侧面；
-   * 所有面之间压黑线，牌与牌之间再留一条外部黑缝。
-   */
-  /**
    * 立着的牌（手牌 / 亮牌）。
-   * 顶部一条"厚度"带：绿 30% + 白 70%；下面是整块象牙白牌面。
-   * 全部是正长方形——不做梯形、不留侧边厚度、不套内框。
-   */
-  /**
-   * 立着的牌（手牌 / 亮牌）。
-   * 一条「厚度」带：绿 30% + 白 70%；其余是整块象牙白牌面。
-   * 全部是正长方形——不做梯形、不留侧边厚度、不套内框。
+   * 顶部（或左右家转 90° 后的外沿）留厚度带：绿 30% + 白 70%。
+   * 贴图只铺厚度带下面的牌面，牌面比例固定 128:176，不会被拉伸。
    */
   private drawStandingFace(tile: string, w: number, h: number, stripAtBottom = false) {
     const g = this.graphics
-    const depth = Math.max(5, Math.round(h * 0.2))
+    const depth = Math.max(5, Math.round(w * TILE_BAND_RATIO))
     const greenH = Math.max(2, Math.round(depth * 0.3))
     const whiteH = depth - greenH
-    const stripY = stripAtBottom ? h - depth : 0
     const faceY = stripAtBottom ? 0 : depth
     const faceH = h - depth
-    g.drawRect(0, stripY, w, greenH, '#2F7A5E')
-    g.drawRect(0, stripY + greenH, w, whiteH, '#FDF9EF')
+    if (stripAtBottom) {
+      // 左右家：带在底部，白在内、绿在最外沿；整块转 90° 后绿边朝外
+      const stripY = h - depth
+      g.drawRect(0, stripY, w, greenH, '#43A882')
+      g.drawRect(0, stripY + greenH, w, whiteH, '#FDF9EF')
+    } else {
+      // 自家：带在顶部，绿在上（靠背）、白在下（靠牌面）
+      g.drawRect(0, 0, w, greenH, '#43A882')
+      g.drawRect(0, greenH, w, whiteH, '#FDF9EF')
+    }
     g.drawRect(0, faceY, w, faceH, '#F2E7CE')
-    // 牌与牌紧挨着：只留一条极淡的右边缘线分开，不做整圈边框
+    if (!this.drawTileArt(tile, 0, faceY, w, faceH)) {
+      this.drawTileText(tile, w, faceY, faceH)
+    }
+    // 贴图/白牌面与桌面颜色接近：外沿压一条暗线，绿白厚度带才立得起来
+    g.drawRect(0, stripAtBottom ? h - 1 : 0, w, 1, 'rgba(8,30,22,0.5)')
+    // 牌与牌紧挨着：只留一条极淡的右边缘线分开，不做整圈边框；画在贴图上面
     g.drawRect(w - 1, 0, 1, h, 'rgba(120,100,70,0.2)')
-    this.drawTileText(tile, w, faceY, faceH)
   }
 
-  /** 扣着的牌（对家牌背）：同一个长方形，顶部同样是绿 30% + 白 70%，牌身整块绿 */
-  /** 扣着的牌（对家牌背）：同一个长方形，顶部同样是绿 30% + 白 70%，牌身整块绿 */
+  /**
+   * 扣着的牌（对家 / 左右家牌背）。
+   * - 对家：白在上、绿在下（绿靠着牌背），下面是深一档的绿牌背；
+   * - 左右家：带在底部，绿在最外沿，转 90° 后绿边朝外。
+   * 牌背的绿比顶部厚度带更深一点，模拟背面受光少。
+   */
   private drawStandingBack(w: number, h: number, stripAtBottom = false) {
     const g = this.graphics
-    const depth = Math.max(5, Math.round(h * 0.2))
+    const depth = Math.max(5, Math.round(w * TILE_BAND_RATIO))
     const greenH = Math.max(2, Math.round(depth * 0.3))
     const whiteH = depth - greenH
-    const stripY = stripAtBottom ? h - depth : 0
     const bodyY = stripAtBottom ? 0 : depth
-    g.drawRect(0, stripY, w, greenH, '#2F7A5E')
-    g.drawRect(0, stripY + greenH, w, whiteH, '#FDF9EF')
-    g.drawRect(0, bodyY, w, h - depth, '#2C7459')
+    g.drawRect(0, bodyY, w, h - depth, '#358F6D')
+    if (stripAtBottom) {
+      const stripY = h - depth
+      g.drawRect(0, stripY, w, greenH, '#43A882')
+      g.drawRect(0, stripY + greenH, w, whiteH, '#FDF9EF')
+    } else {
+      g.drawRect(0, 0, w, whiteH, '#FDF9EF')
+      g.drawRect(0, whiteH, w, greenH, '#43A882')
+    }
+    // 外沿暗线，让牌背和桌布分开
+    g.drawRect(0, stripAtBottom ? h - 1 : 0, w, 1, 'rgba(6,26,19,0.55)')
     g.drawRect(w - 1, 0, 1, h, 'rgba(10,40,30,0.26)')
   }
 
   /**
    * 摊在桌面上的牌（牌河 / 副露 / 打出的牌）。
-   * 看的是牌面本身，右侧和下侧露出一点厚度，外圈压黑线。
+   * 从顶部看只能看到顶面，所以不画厚度带：
+   * 明牌铺满牌面贴图，暗牌（暗杠）只露一块更深的绿牌背。
    */
-  /** 摊在桌面上的牌（牌河 / 副露）：和立牌同一套画法——长方形 + 顶部厚度带 */
   private drawFlat(tile: string, w: number, h: number, back: boolean) {
     const g = this.graphics
-    const depth = Math.max(3, Math.round(h * 0.15))
-    const greenH = Math.max(1, Math.round(depth * 0.3))
-    const whiteH = depth - greenH
-    g.drawRect(0, 0, w, greenH, '#2F7A5E')
-    g.drawRect(0, greenH, w, whiteH, '#FDF9EF')
-    g.drawRect(0, depth, w, h - depth, back ? '#2C7459' : '#F2E7CE')
+    if (back) {
+      g.drawRect(0, 0, w, h, '#358F6D')
+      // 顶面一道很淡的高光，避免整块绿糊成一片
+      g.drawRect(0, 0, w, Math.max(1, Math.round(h * 0.04)), 'rgba(255,255,255,0.06)')
+    } else {
+      g.drawRect(0, 0, w, h, '#F2E7CE')
+      if (!this.drawTileArt(tile, 0, 0, w, h)) this.drawTileText(tile, w, 0, h)
+    }
     g.drawRect(w - 1, 0, 1, h, 'rgba(120,100,70,0.2)')
-    if (!back) this.drawTileText(tile, w, depth, h - depth)
+  }
+
+  /** 整张牌面贴图铺满；图集未就绪时返回 false，交给文字兜底 */
+  private drawTileArt(tile: string, x: number, y: number, w: number, h: number): boolean {
+    const art = tileArt.texture(tile)
+    if (!art) return false
+    this.graphics.drawImage(art, x, y, w, h)
+    return true
   }
 
   private drawTileText(tile: string, faceW: number, y: number, faceH: number) {

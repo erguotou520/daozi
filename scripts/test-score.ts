@@ -428,8 +428,10 @@ console.log('='.repeat(72))
   check('9 点回到自己', seatOffsetFromDice(9), 0)
   const opening = rollOpening(0, 2, 6)
   check('2+6=8 点 → 开牌墙在上家', opening.wallSeat, 3)
+  check('骰子不改东家：东家还是掷骰的人', opening.dealerSeat, 0)
   check('2+6 → 留 2 墩', opening.breakStacks, 2)
   check('下家（座位 1）掷 6 点 → 对面（座位 2）', seatFromDice(1, 6), 2)
+  check('下家坐东掷 3+5=8 点：东家不变、开牌墙在上家（座位 0）', `${rollOpening(1, 3, 5).dealerSeat}/${rollOpening(1, 3, 5).wallSeat}`, '1/0')
 }
 
 // 发牌
@@ -479,22 +481,35 @@ console.log('='.repeat(72))
   check('留 3 墩：第 29 张才接到左手边那面墙', kept[28].from, 3)
 }
 
-// 四把调圈
+// 四局调圈
 {
-  console.log('\n[四把调圈]')
+  console.log('\n[四局调圈]')
   check('指向座位 2 → 座位 2 不动，其余依次调换', rotateSeatsAfterRound([0, 1, 2, 3], 0, 7).join(','), '3,0,2,1')
+  // 顺时针 = 座位号往下走一格；不动的那家被绕过去
+  check('调圈：1 号位掷 7 点 → 3 号位不动', rotateSeatsAfterRound([0, 1, 2, 3], 1, 7).join(','), '2,0,1,3')
+  check('调圈：5 点 = 自己 → 自己不动', rotateSeatsAfterRound([0, 1, 2, 3], 0, 5).join(','), '0,3,1,2')
+  {
+    const moved = rotateSeatsAfterRound([0, 1, 2, 3], 1, 7)
+    check('调圈：0 号顺时针挪到 1 号', moved[1], 0)
+    check('调圈：1 号顺时针挪到 2 号', moved[2], 1)
+    check('调圈：2 号绕过不动的 3 号挪到 0 号', moved[0], 2)
+    check('调圈：3 号不动', moved[3], 3)
+  }
 
   let state = createMatch()
   state = rollRound(state, 2, 6)
-  check('头家掷骰后确定东家', state.dealerSeat, 3)
+  check('掷骰：东家不变、开牌墙按点数', `${state.dealerSeat}/${state.wallSeat}`, '0/3')
   state = settleRound(state, 1)
   check('赢家获得下局掷骰权', state.rollerSeat, 1)
   check('局数 +1', state.round, 2)
+  state = rollRound(state, 1, 4)
+  check('下一把：赢家坐东（骰子不改东家）', `${state.dealerSeat}/${state.wallSeat}`, '1/1')
 
   const circle = settleRound({ ...createMatch(), round: 4 }, 2, 7)
   check('打满 4 局后局数重置为 1', circle.round, 1)
   check('调圈：骰子指向的座位 0 不动', circle.seats[0], 0)
   check('调圈：其余人依次调换', circle.seats.join(','), '0,3,1,2')
+  check('调圈：东家跟着赢家到新座位（座位 3）', circle.rollerSeat, 3)
 
   let threw = false
   try {

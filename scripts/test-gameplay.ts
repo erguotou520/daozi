@@ -295,43 +295,30 @@ section('1. 基础结构：只子、通、连号、对子、四活、不动手')
 section('2. 成牌张相关：压当、单吊、枯只压、老小对')
 
 {
-  const concealed = [
-    '4筒',
-    '5筒',
-    '6筒',
-    '1条',
-    '1条',
-    '1条',
-    '2条',
-    '3条',
-    '4条',
-    '5条',
-    '6条',
-    '7条',
-    '9条',
-    '9条'
-  ]
-  const middle = { concealed, winTile: '5筒' }
+  // 456筒 + 123条 + 567条 + 碰东 + 99条：听 5 筒（卡张）或 9 条（单吊），都只有一张能成
+  const concealed = ['4筒', '5筒', '6筒', '1条', '2条', '3条', '5条', '6条', '7条', '9条', '9条']
+  const melds = [pung('东')]
+  const middle = { concealed, melds, winTile: '5筒' }
   const middleResult = scoreBoth('压当', middle)
   check('成牌张补顺子中张 → 压当', middleResult.patterns['压当'], true)
   check('压当 +1 点', itemPoints(middle, '压当'), 1)
   check('普通压当摸子 1 个大摸子', middleResult.mozi.units, 1)
 
-  const pair = { concealed, winTile: '9条' }
+  const pair = { concealed, melds, winTile: '9条' }
   const pairResult = scoreBoth('单吊', pair)
   check('成牌张补将牌 → 单吊', pairResult.patterns['单吊'], true)
   check('单吊 +1 点', itemPoints(pair, '单吊'), 1)
   check('单吊摸子 1 个大摸子', pairResult.mozi.units, 1)
 
   // 枯只压：卡张 5筒且外面已经出了 3 张
-  const ku = scoreBoth('枯只压接牌', { concealed, winTile: '5筒', visibleWinTileCount: 3 })
+  const ku = scoreBoth('枯只压接牌', { concealed, melds, winTile: '5筒', visibleWinTileCount: 3 })
   check('外面出 3 张 + 只能等 5 筒 → 枯只压', ku.mozi.items.some(i => i.name === '枯只压'), true)
   check('枯只压接牌 = 1 大 + 1 小', `${ku.mozi.big} 大 + ${ku.mozi.small} 小`, '1 大 + 1 小')
 
-  const kuSelf = scoreBoth('枯只压自摸', { concealed, winTile: '5筒', visibleWinTileCount: 3, selfDraw: true })
+  const kuSelf = scoreBoth('枯只压自摸', { concealed, melds, winTile: '5筒', visibleWinTileCount: 3, selfDraw: true })
   check('枯只压自摸 = 3 大', `${kuSelf.mozi.big} 大 + ${kuSelf.mozi.small} 小`, '3 大 + 0 小')
 
-  const notKu = scoreBoth('枯只压边界：外面 2 张', { concealed, winTile: '5筒', visibleWinTileCount: 2 })
+  const notKu = scoreBoth('枯只压边界：外面 2 张', { concealed, melds, winTile: '5筒', visibleWinTileCount: 2 })
   check('外面只有 2 张 → 不是枯只压', notKu.mozi.items.some(i => i.name === '枯只压'), false)
 
   // 边张：89 等 7 / 12 等 3 也算只等一张；23 等 1 两面不算
@@ -342,6 +329,18 @@ section('2. 成牌张相关：压当、单吊、枯只压、老小对')
   check('12 等 3 + 外面 3 张 → 枯只压', highEdge.mozi.items.some(i => i.name === '枯只压'), true)
   const twoWay = scoreBoth('两面 23 等 1', { concealed: ['1筒', '2筒', '3筒', ...edgeBase], winTile: '1筒', visibleWinTileCount: 3 })
   check('23 等 1 两面 → 不算枯只压', twoWay.mozi.items.some(i => i.name === '枯只压'), false)
+
+  // 两面听补将：456筒 + 5678条 + 碰1筒 + 碰7筒，5条/8条都能成，不能算单吊
+  const twoSidedPair = {
+    concealed: ['4筒', '5筒', '6筒', '5条', '6条', '7条', '8条'],
+    melds: [pung('1筒'), pung('7筒')],
+    winTile: '8条',
+    selfDraw: true
+  }
+  const twoSided = scoreBoth('两面听补将', twoSidedPair)
+  check('5 条 / 8 条都能成 → 不是单吊', twoSided.patterns['单吊'], undefined)
+  check('两面听补将 → 单吊不加点', itemPoints(twoSidedPair, '单吊'), 0)
+  check('两面听补将 → 摸子只算普通自摸', twoSided.mozi.units, 0.5)
 
   // 边张压当：外面不足 3 张（不是枯只压）时，12 等 3 仍算压当，+1 点 / 1 个大摸子
   const edgeYaDangInput = {
@@ -517,6 +516,15 @@ section('4. 大拿牌型：清一色、双通、双棒棒、双四活、一一�
     check(`${item.label} 命中大拿牌型`, reason, true)
     if (item.total !== undefined) check(`${item.label} 点数`, result.points.total, item.total)
   }
+
+  // 清一色自带 1 个大摸子：接牌 = 40 + 10 = 50 元/家，自摸再叠 1 小摸子 = 55 元/家
+  const flushHand = ['1万', '2万', '3万', '4万', '5万', '6万', '7万', '8万', '9万', '2万', '3万', '5万', '5万', '4万']
+  const flushDeal = scoreBoth('清一色接牌', { concealed: flushHand, winTile: '4万' })
+  check('清一色接牌 → 1 个大摸子', flushDeal.mozi.units, 1)
+  check('清一色接牌 = 40 元 + 10 元 = 50 元/家', flushDeal.money.perOpponentTotal, 50)
+  const flushSelf = scoreBoth('清一色自摸', { concealed: flushHand, winTile: '4万', selfDraw: true })
+  check('清一色自摸叠 1 小摸子', flushSelf.mozi.units, 1.5)
+  check('清一色自摸 = 40 元 + 15 元 = 55 元/家', flushSelf.money.perOpponentTotal, 55)
 
   // 大拿点数线：B 自摸 52 点
   const threshold = scoreBoth('大拿点数线', {
@@ -1030,12 +1038,16 @@ section('10. LayaAir 移植一致性与牌墙')
 section('东家：成牌者坐庄')
 
 {
-  const settle = (winnerSeat: number, gameOver = false): HandSettlement => ({
+  const settle = (
+    winnerSeat: number,
+    gameOver = false,
+    moneyDelta: number[] = [0, 0, 0, 0]
+  ): HandSettlement => ({
     winnerSeat,
     selfDraw: false,
     score: null as unknown as HandSettlement['score'],
     pointDelta: [0, 0, 0, 0],
-    moneyDelta: [0, 0, 0, 0],
+    moneyDelta: [...moneyDelta],
     gameOver
   })
 
@@ -1060,6 +1072,56 @@ section('东家：成牌者坐庄')
   )
   check('调圈：赢家从座位 2 换到座位 3', circle.seats.join(','), '0,3,1,2')
   check('调圈：东家跟着赢家到新座位', circle.rollerSeat, 3)
+}
+
+/* ------------------------------------------------------------------ *
+ * 四局调圈：4 局（不是 4 把）才换位；最后成牌的人掷骰
+ * ------------------------------------------------------------------ */
+
+section('四局调圈')
+
+{
+  const settle = (winnerSeat: number, gameOver = false): HandSettlement => ({
+    winnerSeat,
+    selfDraw: false,
+    score: null as unknown as HandSettlement['score'],
+    pointDelta: [0, 0, 0, 0],
+    moneyDelta: [0, 0, 0, 0],
+    gameOver
+  })
+
+  // 4 把（还在同一局里）不调圈
+  let many = createMatch()
+  for (let i = 0; i < 8; i += 1) many = applyHandSettlement(many, settle(1))
+  check('8 把都还在第 1 局', many.roundIndex, 1)
+  check('4 把不算一圈：座位不动', many.seats.join(','), '0,1,2,3')
+
+  // 第 1、2、3 局结束都不调圈
+  let match = createMatch({ rollerSeat: 0 })
+  match = applyHandSettlement(match, settle(1, true))
+  match = applyHandSettlement(match, settle(1, true))
+  match = applyHandSettlement(match, settle(1, true))
+  check('打完 3 局还没调圈', `${match.roundIndex}/${match.seats.join(',')}`, '4/0,1,2,3')
+
+  // 第 4 局结束：最后成牌的人（座位 1）掷 7 点 → 指向座位 3（上家）不动
+  match = { ...match, totalMoney: [5, 10, 15, 20] }
+  const circled = applyHandSettlement(match, settle(1, true), { circleDiceSum: 7 })
+  check('第 4 局结束才调圈', circled.roundIndex, 5)
+  check('调圈：上家（座位 3）方位不动', circled.seats[2], 3)
+  check('调圈：自己在 0 号位不动', circled.seats[0], 0)
+  check('调圈：三家按顺时针换位', circled.seats.join(','), '0,1,3,2')
+  check('调圈：累计账目跟着人走', circled.totalMoney.join(','), '5,10,20,15')
+  check('调圈：东家跟赢家到新座位', circled.rollerSeat, 1)
+  check('调圈后下一局仍是赢家坐东', startHand(circled, 1, 1).current?.dealerSeat, 1)
+
+  // 换座后用同一个骰子再调一次：方位不动的规则仍按「相对掷骰者」算
+  const again = applyHandSettlement(
+    { ...circled, roundIndex: 8 },
+    settle(0, true),
+    { circleDiceSum: 5 }
+  )
+  check('5 点 = 自己 → 自己方位不动', again.seats[0], 0)
+  check('调圈：其余三家继续顺时针', again.seats.join(','), '0,2,1,3')
 }
 
 /* ------------------------------------------------------------------ */

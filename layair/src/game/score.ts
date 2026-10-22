@@ -156,6 +156,8 @@ export interface Rules {
   kuZhiYaMozi: { deal: number; selfDraw: number }
   /** 清水（首牌大拿）额外摸子：1 个大摸子 + 1 个小摸子 = 1.5（用户确认） */
   qingShuiMozi: number
+  /** 清一色自带摸子（用户确认 1 个大摸子，和自摸/压当叠加） */
+  qingYiSeMozi: number
   /** 只子是否把副露张数算进该门张数 */
   zhiziIncludesMelds: boolean
   /** 老小对：同花色同时有对 1 和对 9（可含碰/杠）（用户确认） */
@@ -213,6 +215,7 @@ export const DEFAULT_RULES: Rules = {
   anGangCountsAsBuDongShou: true,
   kuZhiYaMozi: { deal: 1.5, selfDraw: 3 },
   qingShuiMozi: 1.5,
+  qingYiSeMozi: 1,
   zhiziIncludesMelds: true,
   laoXiaoDuiEnabled: true,
   doubleRunBonusEnabled: true
@@ -374,6 +377,31 @@ export function decompose(counts: Map<Tile, number>): Decomposition[] {
 
   rec(false, [], [], 0)
   return results
+}
+
+/** 全部 34 种牌面 */
+const ALL_TILES: Tile[] = [...NUMBER_SUITS.flatMap(suit => suitTiles(suit)), ...HONORS]
+
+/** 加进这一张后能不能成牌（4 组面子 + 1 对将，或七对） */
+function isWinningWith(concealed: Tile[], melds: Meld[]): boolean {
+  if (isSevenPairs(concealed, melds)) return true
+  const needSets = 4 - melds.length
+  return decompose(countsOf(concealed)).some(d => d.sets.length === needSets)
+}
+
+/**
+ * 理论听口：13 张手牌（成牌张已拿走）还能成哪些牌。
+ * 单吊 / 压当都要求「纯理论上只能成这一只」——两面听（23 等 1、4）有两种成牌张，不算。
+ * 手里或副露已经有 4 张的牌不可能再成，跳过。
+ */
+function winTilesOf(concealed: Tile[], melds: Meld[]): Tile[] {
+  const used = countsOf(allTiles(concealed, melds))
+  const waits: Tile[] = []
+  for (const tile of ALL_TILES) {
+    if ((used.get(tile) ?? 0) >= 4) continue
+    if (isWinningWith([...concealed, tile], melds)) waits.push(tile)
+  }
+  return waits
 }
 
 function isSevenPairs(concealed: Tile[], melds: Meld[]): boolean {
@@ -567,9 +595,6 @@ function analyze(input: ScoreInput, rules: Rules): HandAnalysis {
 
   // 成牌张在拆解中的角色：将牌（单吊）、顺子中张（压当·卡张）或顺子边张（压当·边张）
   let winTileRole: HandAnalysis['winTileRole'] = 'none'
-  // 只等一张的成牌张：卡张（4_6 等 5）和边张（12 等 3 / 89 等 7）。
-  // 两面（23 等 1、4）和单吊不算 —— 外面出完其中一张，还有别的牌能成。
-  let winTileOnlyWait = false
   const winTile = input.winTile ?? null
   if (winTile) {
     for (const d of decomp) {
@@ -583,21 +608,28 @@ function analyze(input: ScoreInput, rules: Rules): HandAnalysis {
         if (index < 0) continue
         const ranks = set.tiles.map(tile => parseTile(tile).rank)
         if (index === 1) {
-          // 卡张：只等中间这一张
+          // 卡张：成牌张补顺子中间
           winTileRole = 'middle'
-          winTileOnlyWait = true
         } else if (index === 2 && ranks[0] === 1 && winTileRole === 'none') {
-          // 12 等 3：边张，只等 3 —— 也算压当
+          // 12 等 3：边张
           winTileRole = 'edge'
-          winTileOnlyWait = true
         } else if (index === 0 && ranks[2] === 9 && winTileRole === 'none') {
-          // 89 等 7：边张，只等 7 —— 也算压当
+          // 89 等 7：边张
           winTileRole = 'edge'
-          winTileOnlyWait = true
         }
       }
       if (winTileRole === 'middle') break
     }
+  }
+
+  // 理论听口：单吊 / 压当都只在「除了这一只没有别的成牌张」时才算
+  let winTileOnlyWait = false
+  if (winTile) {
+    const rest = [...concealed]
+    const index = rest.indexOf(winTile)
+    if (index >= 0) rest.splice(index, 1)
+    const waits = winTilesOf(rest, melds)
+    winTileOnlyWait = waits.length === 1 && waits[0] === winTile
   }
 
   // 老小对：同一门里同时有对 1 和对 9（家里或碰/杠出来的都算）
@@ -835,9 +867,10 @@ export function scoreHand(input: ScoreInput): ScoreResult {
   }
 
   // 压当 / 单吊
-  // 压当＝成牌张补顺子的唯一缺口：卡张（4_6 等 5）和边张（12 等 3、89 等 7）都算
-  const isYaDang = a.winTileRole === 'middle' || a.winTileRole === 'edge'
-  const isDanDiao = a.winTileRole === 'pair'
+  // 都要求「纯理论上只能成这一只」：压当＝补顺子的唯一缺口（卡张/边张），
+  // 单吊＝唯一成牌张正好是补将牌。两面听（23 等 1、4）两种都能成，不算。
+  const isYaDang = a.winTileOnlyWait && (a.winTileRole === 'middle' || a.winTileRole === 'edge')
+  const isDanDiao = a.winTileOnlyWait && a.winTileRole === 'pair'
   if (isYaDang) patterns['压当'] = true
   if (isDanDiao) patterns['单吊'] = true
   if (isYaDang && enabled('压当')) {
@@ -929,7 +962,8 @@ export function scoreHand(input: ScoreInput): ScoreResult {
 
   // —— 摸子 ——
   const moziItems: MoziItem[] = []
-  const isKuZhiYa = a.winTileOnlyWait && (input.visibleWinTileCount ?? 0) >= 3
+  const isYaDangWait = a.winTileRole === 'middle' || a.winTileRole === 'edge'
+  const isKuZhiYa = a.winTileOnlyWait && isYaDangWait && (input.visibleWinTileCount ?? 0) >= 3
   if (isKuZhiYa && enabled('枯只压')) {
     const units = input.selfDraw ? rules.kuZhiYaMozi.selfDraw : rules.kuZhiYaMozi.deal
     moziItems.push({
@@ -946,6 +980,10 @@ export function scoreHand(input: ScoreInput): ScoreResult {
   }
   if (input.threeToOne) {
     moziItems.push({ name: '三打一', units: 0.5, detail: '明牌成牌，1 个小摸子' })
+  }
+  // 清一色自带 1 个大摸子（大拿也照算，和自摸/压当叠加）
+  if (a.isFlush && rules.qingYiSeMozi > 0) {
+    moziItems.push({ name: '清一色', units: rules.qingYiSeMozi, detail: `清一色成牌，${rules.qingYiSeMozi} 个大摸子` })
   }
   if (input.isFirstHand && isBigWin) {
     moziItems.push({ name: '清水', units: rules.qingShuiMozi, detail: '首牌大拿' })
@@ -977,7 +1015,7 @@ export function scoreHand(input: ScoreInput): ScoreResult {
   for (const item of items.slice(1)) details.push(`${item.name} +${item.points}（${item.detail}）`)
   details.push(`点数小计 ${subtotal} 点${multiplier > 1 ? ` × ${multipliers.join(' × ')}` : ''} = ${total} 点`)
   if (isBigWin) {
-    details.push(`大拿：${bigWinReasons.map(reason => reason.name).join('、')}；普通点子不再计算，按每家 ${rules.bigWinMoneyPerPlayer} 元结算`)
+    details.push(`大拿：${bigWinReasons.map(reason => reason.name).join('、')}；普通点子不再计算，按每家 ${rules.bigWinMoneyPerPlayer} 元 + 摸子结算`)
   } else {
     details.push(`点数结算：每家 ${pointMoneyPerOpponent} 元（1 点 = ${rules.pointYuan} 元，按 5 元取整）`)
   }

@@ -56,11 +56,11 @@ console.log('1. 开局：掷骰、留墩、发牌')
 console.log('='.repeat(72))
 {
   const state = createHand({ diceA: 2, diceB: 6, seed: 7 })
-  check('2+6=8 → 上家（座位 3）做东', state.dealerSeat, 3)
-  check('开牌墙也在座位 3', state.wallSeat, 3)
+  check('掷骰的人坐东（骰子不改东家）', state.dealerSeat, 0)
+  check('2+6=8 → 开牌墙在上家（座位 3）', state.wallSeat, 3)
   check('留 2 墩', state.breakStacks, 2)
-  check('东家 14 张', state.players[3].hand.length, 14)
-  check('闲家各 13 张', [0, 1, 2].map(seat => state.players[seat].hand.length).join(','), '13,13,13')
+  check('东家 14 张', state.players[0].hand.length, 14)
+  check('闲家各 13 张', [1, 2, 3].map(seat => state.players[seat].hand.length).join(','), '13,13,13')
   check('牌墙剩 136-53=83 张', remainingTiles(state), 83)
   check('开局阶段是选缺门', state.phase, 'choose-shortage')
 
@@ -99,10 +99,10 @@ console.log('='.repeat(72))
 // 发牌动画和引擎发牌必须是同一套顺序：四面墙各少多少张要完全对上
 {
   const cases: Array<[number, number, string]> = [
-    [1, 4, '5 点 → 自己坐东'],
-    [1, 5, '6 点 → 下家坐东'],
-    [2, 5, '7 点 → 对面坐东'],
-    [3, 5, '8 点 → 上家坐东']
+    [1, 4, '5 点 → 开牌墙在自己'],
+    [1, 5, '6 点 → 开牌墙在下家'],
+    [2, 5, '7 点 → 开牌墙在对面'],
+    [3, 5, '8 点 → 开牌墙在上家']
   ]
   for (const [diceA, diceB, label] of cases) {
     const state = createHand({ diceA, diceB, seed: 3 })
@@ -393,7 +393,7 @@ console.log('='.repeat(72))
 
 /* ------------------------------------------------------------------ */
 console.log('\n' + '='.repeat(72))
-console.log('10. 局流程：点数转移、局末清算、四把调圈')
+console.log('10. 局流程：点数转移、局末清算、四局调圈')
 console.log('='.repeat(72))
 
 /** 把动作作用到 match.current 上 */
