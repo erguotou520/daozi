@@ -16,6 +16,7 @@ import {
   remainingTiles,
   settleHand,
   takeWallTile,
+  visibleCount,
   wallVisualOf,
   type HandState,
   type RoundAction
@@ -505,6 +506,79 @@ const fakeSettlement = (winnerSeat: number): HandSettlement => {
   check('不调圈：座位不动', fixed.seats.join(','), '0,1,2,3')
   check('不调圈：局数照样 +1', fixed.roundIndex, 5)
   check('不调圈：累计金额照记', fixed.totalMoney.join(','), '135,-45,-45,-45')
+}
+
+/* ------------------------------------------------------------------ */
+console.log('\n' + '='.repeat(72))
+console.log('10. 枯只压：自己碰出去的也算「场上最后一张」')
+console.log('='.repeat(72))
+{
+  // 用户反馈：碰了 2 万，手里 1 万 3 万 卡 2 万，成的就是最后一张 2 万。
+  // 另外两个顺子 + 南南 做将，缺条，手牌合法。
+  const others: Tile[][] = [
+    [],
+    ['1筒', '1筒', '6条', '6条', '西', '西', '北', '北', '1条', '2条', '3条', '4万', '4万'],
+    ['5万', '5万', '6万', '6万', '7万', '7万', '2条', '2条', '3条', '3条', '发', '发', '白'],
+    ['5条', '5条', '6条', '6条', '7条', '7条', '2筒', '2筒', '3筒', '3筒', '中', '中', '白']
+  ]
+  const concealed = ['1万', '3万', '4筒', '5筒', '6筒', '7筒', '8筒', '9筒', '南', '南']
+
+  /** 摆好「碰 2 万 + 1 万 3 万 等 2 万」的局面；selfDraw 时 2 万 在手里 */
+  const setup = (selfDraw: boolean): HandState => {
+    const state = createHand({
+      diceA: 3,
+      diceB: 3,
+      hands: [concealed, others[1], others[2], others[3]],
+      piles: [['9筒'], ['9筒'], ['9筒'], ['9筒']],
+      aiSeats: []
+    })
+    state.players[0].shortage = '条'
+    state.players[0].melds = [{ kind: '碰', tile: '2万' }]
+    state.players[0].hand = selfDraw ? [...concealed, '2万'] : [...concealed]
+    state.phase = 'discard'
+    state.turn = 0
+    state.drawnTile = selfDraw ? '2万' : null
+    return state
+  }
+
+  // 口径：只算别家 vs 连自己碰出去的一起算
+  const probe = setup(true)
+  check('visibleCount：只算别家时 2 万 是 0 张', visibleCount(probe, '2万', 0), 0)
+  check('visibleCount：算上自己碰出的 3 张', visibleCount(probe, '2万', null), 3)
+
+  // 自摸：2 万 是场上最后一张 → 枯只压 3 个大摸子
+  const selfDrawn = applyAction(setup(true), { type: 'win', seat: 0 })
+  const selfScore = selfDrawn.winner?.score
+  check('自摸：成牌结构合法', selfScore?.isWinningHand, true)
+  check('自摸：自己碰出去的 3 张也算已出 → 枯只压', selfScore?.mozi.items.some(i => i.name === '枯只压'), true)
+  check('自摸枯只压 = 3 个大摸子', selfScore?.mozi.big, 3)
+  // 点数 21（底 4 + 碰 1 + 小连号 5 + 四活 10 + 压当 1）×2 = 42 → 20 元/家；摸子 3 大 = 30 元/家
+  check('自摸：点数钱仍是 20 元/家', selfScore?.money.pointMoneyPerOpponent, 20)
+  check('自摸：每家合计 50 元（20 点数 + 30 摸子）', selfScore?.money.perOpponentTotal, 50)
+
+  // 接牌：别家打出最后一张 2 万，同样算枯只压（1 大 + 1 小）
+  const claimed = setup(false)
+  // 座位 1 缺筒、手里没筒，才能自由打 2 万
+  claimed.players[1].shortage = '筒'
+  claimed.players[1].hand = ['6条', '6条', '西', '西', '北', '北', '1条', '2条', '2万', '4万', '4万', '5万', '5万']
+  claimed.phase = 'discard'
+  claimed.turn = 1
+  claimed.drawnTile = '2万'
+  const afterDiscard = applyAction(claimed, { type: 'discard', seat: 1, tile: '2万' })
+  check('接牌：座位 0 进入待表态', afterDiscard.pendingClaims.includes(0), true)
+  const claimedWin = applyAction(afterDiscard, { type: 'claim', seat: 0, claim: '成' })
+  const claimScore = claimedWin.winner?.score
+  check('接牌：同样算枯只压', claimScore?.mozi.items.some(i => i.name === '枯只压'), true)
+  check('枯只压接牌 = 1 大 + 1 小', `${claimScore?.mozi.big} 大 + ${claimScore?.mozi.small} 小`, '1 大 + 1 小')
+
+  // 边界：自己的碰不是 2 万、外面只出了 2 张 → 不是枯只压（还是普通压当）
+  const few = setup(true)
+  few.players[0].melds = [{ kind: '碰', tile: '1筒' }]
+  few.players[0].hand = ['1万', '3万', '4筒', '5筒', '6筒', '7筒', '8筒', '9筒', '南', '南', '2万']
+  few.players[1].discards = ['2万', '2万']
+  const fewScore = applyAction(few, { type: 'win', seat: 0 }).winner?.score
+  check('外面只出 2 张 → 不算枯只压', fewScore?.mozi.items.some(i => i.name === '枯只压'), false)
+  check('外面只出 2 张 → 仍是压当 1 个大摸子', fewScore?.mozi.big, 1)
 }
 
 /* ------------------------------------------------------------------ */

@@ -1017,6 +1017,27 @@ section('10. LayaAir 移植一致性与牌墙')
   check('LayaAir 与 web 摸牌状态一致', summary(web), summary(laya as HandState))
   check('LayaAir 与 web 合法动作一致', layaLegalActions(laya, 0).length, legalActions(web, 0).length)
 
+  // 枯只压：自己碰出去的 3 张也算「场上最后一张」，两份 game.ts 必须一致
+  const kuPiles = basePiles()
+  const kuShortages: Array<'万' | '筒' | '条'> = ['条', '筒', '条', '条']
+  const pose = (state: HandState) => {
+    state.players[0].melds = [{ kind: '碰', tile: '2万' }]
+    state.players[0].hand = ['1万', '3万', '4筒', '5筒', '6筒', '7筒', '8筒', '9筒', '南', '南', '2万']
+    state.phase = 'discard'
+    state.turn = 0
+    state.drawnTile = '2万'
+    return state
+  }
+  const webKu = pose(ready(baseHands(), kuPiles, kuShortages))
+  let layaKuState = layaCreateHand({ diceA: 1, diceB: 4, hands: baseHands(), piles: basePiles(), aiSeats: [] })
+  for (const seat of [0, 1, 2, 3]) {
+    layaKuState = layaApplyAction(layaKuState, { type: 'chooseShortage', seat, suit: kuShortages[seat] } as RoundAction)
+  }
+  const layaKu = layaApplyAction(pose(layaKuState as HandState), { type: 'win', seat: 0 })
+  const webKuWin = applyAction(webKu, { type: 'win', seat: 0 })
+  check('LayaAir 与 web 枯只压摸子一致', layaKu.winner?.score.mozi.big, webKuWin.winner?.score.mozi.big)
+  check('枯只压：碰出去的 3 张算已出 → 3 个大摸子', webKuWin.winner?.score.mozi.big, 3)
+
   // 牌墙形状：一墩两张，抽掉上层时只剩半格高度
   const wallState = ready(baseHands(), basePiles(), ['万', '条', '条', '条'])
   const walls = [0, 1, 2, 3].map(seat => wallVisualOf(wallState, seat))

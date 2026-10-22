@@ -482,11 +482,18 @@ export function isTenpaiHand(player: PlayerState): boolean {
   return false
 }
 
-/** 某张牌在别家已公开的张数（打出的 + 副露的） */
-export function visibleCount(state: HandState, tile: Tile, excludeSeat: number): number {
+/**
+ * 某张牌在桌上已公开的张数（牌河里打出的 + 碰杠亮出的）。
+ *
+ * excludeSeat 传座位号时不计这一家——判断「别家已经出了几张」（禁打提示）用。
+ * 传 null 时自己的也计入：枯只压看的是「成牌张是不是场上最后一张」，
+ * 自己碰出去的、打出去的都是摆在桌面上的，同样算已经出过。
+ * （用户反馈：碰了 2 万，手里 1 万 3 万 卡 2 万，成的就是最后一张 2 万，必须算枯只压。）
+ */
+export function visibleCount(state: HandState, tile: Tile, excludeSeat: number | null): number {
   let count = 0
   for (const player of state.players) {
-    if (player.seat === excludeSeat) continue
+    if (excludeSeat !== null && player.seat === excludeSeat) continue
     count += player.discards.filter(item => item === tile).length
     for (const meld of player.melds) count += meldTiles(meld).filter(item => item === tile).length
   }
@@ -983,7 +990,8 @@ function resolveWin(
   }
 
   const concealed = selfDraw ? [...player.hand] : winTile ? [...player.hand, winTile] : [...player.hand]
-  const visible = winTile ? visibleCount(state, winTile, seat) : 0
+  // 枯只压看「场上最后一张」：自己碰出去 / 打出去的也算已出，所以这里不排除自己
+  const visible = winTile ? visibleCount(state, winTile, null) : 0
 
   // 三打一：三家缺同一门、自己缺另一门（定缺结束时已经标记，老存档则按缺门重算）
   const threeToOne = (state.threeToOneSeat ?? threeToOneOf(state)?.seat ?? null) === seat
