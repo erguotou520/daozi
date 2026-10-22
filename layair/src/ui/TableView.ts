@@ -991,15 +991,15 @@ export class TableView {
    */
   private centerActions(hand: HandState): Array<{ label: string; onClick: () => void }> {
     if (this.is3D() || this.phase !== 'playing' || hand.phase === 'over') return []
+    // 定缺是四家同时选，谁先选都行，不能受「轮到自己」限制：
+    // 否则只有庄家是自己那一把能点，庄家换成别家后按钮就再也不出现了。
+    if (hand.phase === 'choose-shortage') {
+      if (hand.players[0].shortage) return []
+      return SHORTAGE_OPTIONS.map(suit => ({ label: `缺${suit}`, onClick: () => this.act({ type: 'chooseShortage', seat: 0, suit }) }))
+    }
     if (!this.isMyTurn(hand)) return []
     const actions = legalActions(hand, 0)
     const out: Array<{ label: string; onClick: () => void }> = []
-    if (hand.phase === 'choose-shortage' && !hand.players[0].shortage) {
-      for (const suit of SHORTAGE_OPTIONS) {
-        out.push({ label: `缺${suit}`, onClick: () => this.act({ type: 'chooseShortage', seat: 0, suit }) })
-      }
-      return out
-    }
     if (hand.phase === 'claim' || hand.phase === 'rob-kong') {
       for (const action of actions) {
         if (action.type === 'pass') out.push({ label: '过', onClick: () => this.act(action) })
@@ -1914,7 +1914,19 @@ export class TableView {
 
   /** 把原本在中央面板的 成/杠/碰/过 收到操作条，避免挡牌河 */
   private appendDock3DActions(items: Array<Laya.Sprite | Laya.Text>, hand: HandState, myTurn: boolean) {
-    if (this.phase !== 'playing' || hand.phase === 'over' || !myTurn) return
+    if (this.phase !== 'playing' || hand.phase === 'over') return
+    // 定缺：不受轮次限制，四家各自选各自的
+    if (hand.phase === 'choose-shortage') {
+      if (hand.players[0].shortage) return
+      for (const suit of SHORTAGE_OPTIONS) {
+        items.push(makeButton({
+          width: this.u(40), height: this.u(26), label: `缺${suit}`, fontSize: this.u(11), face: 'chip',
+          onClick: () => this.act({ type: 'chooseShortage', seat: 0, suit })
+        }))
+      }
+      return
+    }
+    if (!myTurn) return
     const actions = legalActions(hand, 0)
     if (hand.phase === 'claim' || hand.phase === 'rob-kong') {
       for (const action of actions) {

@@ -50,6 +50,16 @@ function ready(hands: Tile[][], piles: Tile[][], shortages: string[]): HandState
   return state
 }
 
+// 定缺阶段四家各自选，不受「轮到谁」限制（UI 靠这个决定显不显示 缺万/缺筒/缺条 按钮）
+{
+  const state = createHand({ diceA: 2, diceB: 6, seed: 7 })
+  const patched: HandState = { ...state, turn: 2, dealerSeat: 2 }
+  check('庄家不是自己时自己也能定缺', legalActions(patched, 0).filter(action => action.type === 'chooseShortage').length, 3)
+  const chosen = applyAction(patched, { type: 'chooseShortage', seat: 0, suit: '万' } as RoundAction)
+  check('自己定缺后选项清空', legalActions(chosen, 0).filter(action => action.type === 'chooseShortage').length, 0)
+  check('别家还能继续定缺', legalActions(chosen, 1).filter(action => action.type === 'chooseShortage').length, 3)
+}
+
 /* ------------------------------------------------------------------ */
 console.log('='.repeat(72))
 console.log('1. 开局：掷骰、留墩、发牌')
