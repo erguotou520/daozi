@@ -51,6 +51,8 @@ export interface WxLike {
   onShareTimeline?: (listener: () => ShareCard) => void
   shareAppMessage?: (options: ShareCard) => void
   showShareImageMenu?: (options: { path: string; success?: () => void; fail?: (error: any) => void }) => void
+  saveImageToPhotosAlbum?: (options: { filePath: string; success?: () => void; fail?: (error: any) => void }) => void
+  openSetting?: (options?: { success?: (result: any) => void }) => void
   getAppBaseInfo?: () => { SDKVersion?: string }
   getSystemInfoSync?: () => { SDKVersion?: string }
 }
@@ -204,6 +206,37 @@ export function shareImage(path: string, options: ShareImageOptions = {}): boole
     wx.showShareImageMenu({
       path,
       fail: (error: any) => options.onFail?.(String(error?.errMsg ?? 'showShareImageMenu 失败'))
+    })
+    return true
+  } catch (error) {
+    options.onFail?.(String(error))
+    return false
+  }
+}
+
+export interface SaveAlbumOptions {
+  /** 默认取当前环境的 wx，测试里可以塞假对象 */
+  wx?: WxLike | null
+  onSaved?: () => void
+  onFail?: (reason: string) => void
+}
+
+/**
+ * 把截图存进手机相册（分享图片弹窗打不开时的退路）。
+ * 相册权限被拒时顺手拉起设置页——玩家不用自己翻「设置 → 隐私 → 相册」。
+ */
+export function saveImageToAlbum(path: string, options: SaveAlbumOptions = {}): boolean {
+  const wx = options.wx === undefined ? wechat() : options.wx
+  if (!wx || !path || typeof wx.saveImageToPhotosAlbum !== 'function') return false
+  try {
+    wx.saveImageToPhotosAlbum({
+      filePath: path,
+      success: () => options.onSaved?.(),
+      fail: (error: any) => {
+        const reason = String(error?.errMsg ?? 'saveImageToPhotosAlbum 失败')
+        options.onFail?.(reason)
+        if (/auth|authorize|permission|deny|denied/i.test(reason)) wx.openSetting?.({})
+      }
     })
     return true
   } catch (error) {

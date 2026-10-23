@@ -8,7 +8,7 @@
  * - initShare 只装一次、菜单里同时打开「发送给朋友 / 分享到朋友圈」
  * - 右上角菜单回调拿到的卡片字段（朋友圈用 from=timeline，且只带朋友圈认识的字段）
  * - 游戏内主动转发只认识 title/imageUrl/query
- * - 截图分享走 wx.showShareImageMenu，老版本没接口时能退回 shareAppMessage({ imageUrl })；失败原因要能带回界面
+ * - 截图分享走 wx.showShareImageMenu，失败时退回「存相册」；原因要能带回界面
  */
 
 import {
@@ -21,6 +21,7 @@ import {
   currentShareCard,
   initShare,
   isWechatMiniGame,
+  saveImageToAlbum,
   setShareCard,
   shareImage,
   shareToFriend,
@@ -174,6 +175,46 @@ const failing: any = {
 let failureReason = ''
 check('分享被拒时返回 true（接口已调起）', shareImage('/tmp/daozi-shot.png', { wx: failing, onFail: r => (failureReason = r) }), true)
 check('分享被拒时把 errMsg 交给回调', failureReason, 'showShareImageMenu:fail path is invalid')
+
+/* ------------------------------------------------------------------ */
+console.log('\n七、存到相册（分享图片弹窗打不开时的退路）')
+{
+  const calls: { saved?: string; settingOpened?: boolean } = {}
+  let saved = false
+  let saveFail = ''
+  const wxSave: any = {
+    showShareMenu() {},
+    saveImageToPhotosAlbum(options: any) {
+      calls.saved = options.filePath
+      options.success?.()
+    },
+    openSetting() {
+      calls.settingOpened = true
+    }
+  }
+  check('存相册调起来了', saveImageToAlbum('/tmp/daozi-shot.png', { wx: wxSave, onSaved: () => (saved = true) }), true)
+  check('存相册用的是这张截图', calls.saved, '/tmp/daozi-shot.png')
+  check('存成功回调触发', saved, true)
+  check('存成功不拉设置页', calls.settingOpened, undefined)
+
+  const wxDenied: any = {
+    showShareMenu() {},
+    saveImageToPhotosAlbum(options: any) {
+      options.fail?.({ errMsg: 'saveImageToPhotosAlbum:fail auth deny' })
+    },
+    openSetting() {
+      calls.settingOpened = true
+    }
+  }
+  calls.settingOpened = false
+  check('权限被拒时返回 true（接口已调起）', saveImageToAlbum('/tmp/daozi-shot.png', { wx: wxDenied, onFail: r => (saveFail = r) }), true)
+  check('权限被拒时带回 errMsg', saveFail, 'saveImageToPhotosAlbum:fail auth deny')
+  check('权限被拒时自动拉起设置页', calls.settingOpened, true)
+
+  const noAlbumApi: any = { showShareMenu() {} }
+  check('没有 saveImageToPhotosAlbum 时返回 false', saveImageToAlbum('/tmp/daozi-shot.png', { wx: noAlbumApi }), false)
+  check('没有 wx 时返回 false', saveImageToAlbum('/tmp/daozi-shot.png', { wx: null }), false)
+}
 
 /* ------------------------------------------------------------------ */
 console.log('\n' + '='.repeat(72))

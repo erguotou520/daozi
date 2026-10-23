@@ -42,7 +42,16 @@ import {
   type HistoryState,
   type SavedGame
 } from './storage'
-import { DEFAULT_SHARE_TITLE, SHARE_QUERY_FRIEND, initShare, isWechatMiniGame, setShareCard, shareImage, shareToFriend } from './share'
+import {
+  DEFAULT_SHARE_TITLE,
+  SHARE_QUERY_FRIEND,
+  initShare,
+  isWechatMiniGame,
+  saveImageToAlbum,
+  setShareCard,
+  shareImage,
+  shareToFriend
+} from './share'
 
 const STACKS = 17
 const PER_LINE = 13
@@ -3055,19 +3064,58 @@ export class TableView {
       this.flash(`截图失败：${this.shotError || '未知原因'}`)
       return
     }
+    console.log('[share] 截图完成', path)
     // 微信「分享图片」弹窗：发送给朋友 / 收藏 / 下载
     const opened = shareImage(path, {
-      onFail: reason => this.flash(`分享没调起来：${reason.slice(0, 22)}`)
+      onFail: reason => this.offerSaveAlbum(path, reason)
     })
-    if (!opened) {
-      // 基础库 2.14.3 以前没有 showShareImageMenu，退回转发卡片（图用这张截图）
-      if (shareToFriend({ imageUrl: path })) this.flash('用转发卡片发出去，图就是这张截图')
-      else this.flash('这台微信不支持发图片')
+    if (!opened) this.offerSaveAlbum(path, '这台微信没有「分享图片」接口')
+  }
+
+  /**
+   * 微信的「分享图片」打不开时的退路：原生弹窗问一句，存到相册。
+   * 相册权限被拒时 saveImageToAlbum 会顺手拉起设置页。
+   */
+  private offerSaveAlbum(path: string, reason: string) {
+    console.warn('[share] 分享图片弹窗失败，改存相册', reason)
+    const wx: any = (globalThis as any).wx
+    const save = () =>
+      saveImageToAlbum(path, {
+        onSaved: () => this.flash('已经存到相册了'),
+        onFail: why => this.flash(`存相册失败：${why.slice(0, 40)}`)
+      })
+    if (!wx?.showModal) {
+      save()
+      return
     }
+    wx.showModal({
+      title: '分享图片打不开',
+      content: `${reason}。要把这张截图存到相册吗？`,
+      confirmText: '存相册',
+      cancelText: '算了',
+      success: (res: any) => {
+        if (res?.confirm) save()
+      }
+    })
   }
 
   /** 上一次截图失败的原因：直接闪到界面上，真机调试时一眼看出卡在哪一步 */
   private shotError = ''
+
+  /**
+   * 屏幕画布的后备像素尺寸（canvas.width/height）。
+   * 注意不是 Laya.Browser.clientWidth（那是 CSS 尺寸）：引擎的 gl.viewport 用的是画布后备尺寸，
+   * 高 DPI 手机上两者差 2~3 倍，用 CSS 尺寸建 RenderTexture 会只截到屏幕左下角一块。
+   */
+  private screenSize(): { width: number; height: number } {
+    const main = this.mainCanvas()
+    if (main?.width && main?.height) return { width: main.width, height: main.height }
+    const wx: any = (globalThis as any).wx
+    const dpr = wx?.getSystemInfoSync?.().pixelRatio || 1
+    const width = Math.round((Laya.Browser.clientWidth || Laya.stage.width) * dpr)
+    const height = Math.round((Laya.Browser.clientHeight || Laya.stage.height) * dpr)
+    return { width, height }
+  }
 
   /** 微信的主画布（渲染这张牌桌的那块屏幕画布） */
   private mainCanvas(): any {
@@ -3095,8 +3143,9 @@ export class TableView {
   private captureScreenshot(): string | null {
     this.shotError = ''
 
-    // 1) RenderTexture 读像素 → 自己拼 2D 图。小游戏里最稳：
-    //    不走 Laya 的 ImageData 中转，也不依赖 WebGL 的 preserveDrawingBuffer
+    // 1) RenderTexture 读像素 → 自己拼 2D 图。
+    //    RT 尺寸必须等于画布后备像素（screenSize），否则 gl.viewport 比 RT 大，
+    //    只会截到屏幕左下角一块（真机上就是这样翻车的）。
     const viaRt = this.captureWithRenderTexture()
     if (viaRt) return viaRt
 
@@ -3105,8 +3154,8 @@ export class TableView {
     if (main) {
       try {
         const destWidth = 1000
-        const width = main.width || Laya.Browser.clientWidth || Laya.stage.width
-        const height = main.height || Laya.Browser.clientHeight || Laya.stage.height
+        const width = main.width || 0
+        const height = main.height || 0
         if (width && height) {
           const path = main.toTempFilePathSync({
             x: 0,
@@ -3155,6 +3204,32 @@ export class TableView {
     return null
   }
 
+  /** 采样一批像素，全是同一个颜色就说明这一帧是空的 */
+  private pixelsAreBlank(pixels: Uint8Array): boolean {
+    if (pixels.length < 4) return true
+    const pixelsCount = Math.floor(pixels.length / 4)
+    const step = Math.max(1, Math.floor(pixelsCount / 512))
+    let minR = 255
+    let maxR = 0
+    let minG = 255
+    let maxG = 0
+    let minB = 255
+    let maxB = 0
+    for (let i = 0; i < pixelsCount; i += step) {
+      const base = i * 4
+      const r = pixels[base]
+      const g = pixels[base + 1]
+      const b = pixels[base + 2]
+      if (r < minR) minR = r
+      if (r > maxR) maxR = r
+      if (g < minG) minG = g
+      if (g > maxG) maxG = g
+      if (b < minB) minB = b
+      if (b > maxB) maxB = b
+    }
+    return maxR - minR < 4 && maxG - minG < 4 && maxB - minB < 4
+  }
+
   /** 临时文件是不是小得可疑（空白截图通常只有几 KB） */
   private looksBlank(path: string): boolean {
     try {
@@ -3169,8 +3244,7 @@ export class TableView {
   /** 用 RenderTexture 读像素，再用 2D canvas 拼回来导出（小游戏里没有全局 ImageData） */
   private captureWithRenderTexture(): string | null {
     try {
-      const width = Laya.Browser.clientWidth || Laya.stage.width
-      const height = Laya.Browser.clientHeight || Laya.stage.height
+      const { width, height } = this.screenSize()
       if (!width || !height) {
         this.shotError = this.shotError || '画布尺寸是 0'
         return null
@@ -3185,6 +3259,11 @@ export class TableView {
       if (!pixels || !pixels.length) {
         rt?.destroy?.()
         this.shotError = '读不到像素'
+        return null
+      }
+      if (this.pixelsAreBlank(pixels)) {
+        rt?.destroy?.()
+        this.shotError = '离屏渲染出来是空白图'
         return null
       }
       const canvas = wx.createCanvas()
@@ -3356,21 +3435,24 @@ export class TableView {
   private renderNotice() {
     if (!this.notice) return
     const m = this.m
-    const w = Math.min(m.W * 0.72, this.u(320))
-    const h = this.u(30)
-    const panel = makePanel(w, h, this.u(15), 'rgba(9,34,27,0.94)', 'rgba(217,180,95,0.8)', 1.5)
-    panel.pos(Math.round((m.W - w) / 2), this.u(12))
+    // 提示条允许折两行：微信的 errMsg 很长（showShareImageMenu:fail …），单行会被裁掉
+    const w = Math.min(m.W * 0.86, this.u(420))
+    const h = this.u(40)
+    const panel = makePanel(w, h, this.u(10), 'rgba(9,34,27,0.94)', 'rgba(217,180,95,0.8)', 1.5)
+    panel.pos(Math.round((m.W - w) / 2), this.u(10))
     panel.mouseEnabled = false
-    panel.addChild(
-      makeText(this.notice, {
-        size: this.u(12),
-        color: COLORS.ivory,
-        align: 'center',
-        valign: 'middle',
-        width: w,
-        height: h
-      })
-    )
+    const text = makeText(this.notice, {
+      size: this.u(10),
+      color: COLORS.ivory,
+      align: 'center',
+      valign: 'middle',
+      width: w - this.u(16),
+      height: h - this.u(6)
+    })
+    text.wordWrap = true
+    text.x = this.u(8)
+    text.y = this.u(3)
+    panel.addChild(text)
     this.overlay.addChild(panel)
   }
 
