@@ -34,6 +34,7 @@ import {
   legalActions,
   legalDiscards,
   playableDiscards,
+  revealHandTiles,
   settleHand,
   wallVisualOf,
   type HandSettlement,
@@ -46,7 +47,8 @@ import {
   applyAction as layaApplyAction,
   createHand as layaCreateHand,
   isTenpaiHand as layaIsTenpaiHand,
-  legalActions as layaLegalActions
+  legalActions as layaLegalActions,
+  revealHandTiles as layaRevealHandTiles
 } from '../layair/src/game/game'
 
 /* ------------------------------------------------------------------ *
@@ -355,17 +357,36 @@ section('2. 成牌张相关：压当、单吊、枯只压、老小对')
   check('边张压当摸子 1 个大摸子', edgeYaDang.mozi.units, 1)
   check('边张压当提示「边张」', edgeYaDang.points.items.find(i => i.name === '压当')?.detail, '成牌张补顺子边张')
 
-  // 老小对：同门对 1 + 对 9，碰出来的也算；只计一门
+  // 老小对：同一门 1 和 9 都要成坎（至少 3 张，碰/杠也算）
   const laoXiao = {
-    concealed: ['9筒', '9筒', '2筒', '3筒', '4筒', '5筒', '6筒', '7筒', '1条', '2条', '3条'],
+    concealed: ['9筒', '9筒', '9筒', '2筒', '3筒', '4筒', '5筒', '6筒', '7筒', '9条', '9条'],
     melds: [pung('1筒')]
   }
   scoreBoth('老小对', laoXiao)
-  check('同门对 1 + 对 9 → 老小对 +5', itemPoints(laoXiao, '老小对'), 5)
-  check('老小对说明带花色', scoreHand(laoXiao).details.some(line => line.includes('筒 同时有对 1 和对 9')), true)
+  check('碰 1 筒 + 手里 999 筒 → 老小对 +5', itemPoints(laoXiao, '老小对'), 5)
+  check('老小对说明带花色', scoreHand(laoXiao).details.some(line => line.includes('筒 有 1、9 的刻子')), true)
 
   const laoXiaoOff = scoreHand({ ...laoXiao, rules: { laoXiaoDuiEnabled: false } })
   check('关闭老小对开关 → 不再计算', laoXiaoOff.points.items.some(i => i.name === '老小对'), false)
+
+  // 只有 11 筒、99 筒两个对子（2 张）不行：必须至少 3 张成坎
+  const laoXiaoPairs = {
+    concealed: ['1筒', '1筒', '9筒', '9筒', '2筒', '2筒', '3筒', '3筒', '4条', '4条', '5条', '5条', '6条', '6条']
+  }
+  check('只有对 1 + 对 9（各 2 张）→ 不算老小对', itemPoints(laoXiaoPairs, '老小对'), 0)
+  check('但仍是七对', itemPoints(laoXiaoPairs, '七对'), 31)
+
+  // 11123 拆成 123 + 11：三张 1 被顺子拆走一张，不算坎
+  const laoXiaoSplit = {
+    concealed: ['1筒', '1筒', '1筒', '2筒', '3筒', '7筒', '8筒', '9筒', '9筒', '9筒', '9筒', '4条', '5条', '6条']
+  }
+  check('11123 拆成 123 + 11 → 不算老小对', itemPoints(laoXiaoSplit, '老小对'), 0)
+
+  // 手里 111 + 999：都成坎才 +5
+  const laoXiaoTriplets = {
+    concealed: ['1筒', '1筒', '1筒', '9筒', '9筒', '9筒', '4条', '5条', '6条', '7条', '8条', '9条', '2条', '2条']
+  }
+  check('手里 111 筒 + 999 筒 → 老小对 +5', itemPoints(laoXiaoTriplets, '老小对'), 5)
 }
 
 /* ------------------------------------------------------------------ *
@@ -1144,6 +1165,39 @@ section('四局调圈')
   )
   check('5 点 = 自己 → 自己方位不动', again.seats[0], 0)
   check('调圈：其余三家继续顺时针', again.seats.join(','), '0,2,1,3')
+}
+
+/* ------------------------------------------------------------------ */
+
+section('亮牌：成牌张要补进赢家手牌')
+
+{
+  const makeState = (concealed: Tile[], winTile: Tile | null, selfDraw: boolean): HandState =>
+    ({
+      players: [{ hand: [...concealed] }, { hand: [] }, { hand: [] }, { hand: [] }],
+      winner: { seat: 0, selfDraw, winTile }
+    }) as unknown as HandState
+
+  // 接牌单吊：手里本来只有一张 7 条，成牌张是别人打出的另一张 7 条
+  const dealIn = makeState(['3筒', '4筒', '5筒', '7条', '8条', '9条', '2条'], '7条', false)
+  const dealt = revealHandTiles(dealIn, 0)
+  check('接牌单吊：亮牌 8 张（原来 7 张 + 成牌张）', dealt.length, 8)
+  check('接牌单吊：成牌张放在最后', dealt[dealt.length - 1], '7条')
+  check('接牌单吊：两张 7 条都在', dealt.filter(tile => tile === '7条').length, 2)
+  check('LayaAir 亮牌结果一致', JSON.stringify(layaRevealHandTiles(dealIn, 0)), JSON.stringify(dealt))
+
+  // 自摸：成牌张已经在手里，拿出去再放到最后，不能少一张
+  const selfDraw = makeState(['3筒', '4筒', '5筒', '7条', '8条', '9条', '7条', '2条'], '7条', true)
+  const drawn = revealHandTiles(selfDraw, 0)
+  check('自摸：亮牌仍是 8 张', drawn.length, 8)
+  check('自摸：成牌张放在最后', drawn[drawn.length - 1], '7条')
+  check('自摸：两张 7 条都在', drawn.filter(tile => tile === '7条').length, 2)
+
+  // 接牌的不是手里有的牌：直接补进来
+  const other = makeState(['1万', '2万', '3万', '4条', '5条', '6条', '9筒'], '9筒', false)
+  const withOther = revealHandTiles(other, 0)
+  check('接牌补一张不在手里的牌', withOther.length, 8)
+  check('补进来的牌在最后', withOther[withOther.length - 1], '9筒')
 }
 
 /* ------------------------------------------------------------------ */

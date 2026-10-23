@@ -16,6 +16,7 @@ import {
   parseTile,
   scoreHand,
   tileOf,
+  tileOrder,
   type Meld,
   type MeldKind,
   type NumberSuit,
@@ -1078,6 +1079,33 @@ export function settleHand(state: HandState): HandSettlement | null {
     moneyDelta,
     gameOver: after.some(points => points <= 0)
   }
+}
+
+/* ------------------------------------------------------------------ *
+ * 亮牌
+ * ------------------------------------------------------------------ */
+
+/**
+ * 亮牌用的手牌：按牌序排好，成牌张单独放到最后。
+ *
+ * 接牌成时，成牌张本来就在别人牌河里，不在赢家手上——直接 push 就行。
+ * 只有自摸的成牌张已经在手里，才要先拿出来再放到最后。
+ * 以前不分自摸/接牌，一律先 `indexOf` 删一张再 push：单吊、对倒这种
+ * 等牌正好是手里已有的一张时，会把原有的那张删掉，亮出来永远少一张。
+ */
+export function revealHandTiles(hand: HandState, seat: number): Tile[] {
+  const tiles = [...hand.players[seat].hand]
+  const win = hand.winner
+  if (win && win.seat === seat && win.winTile) {
+    if (win.selfDraw) {
+      const index = tiles.indexOf(win.winTile)
+      if (index >= 0) tiles.splice(index, 1)
+    }
+    tiles.sort(tileOrder)
+    tiles.push(win.winTile)
+    return tiles
+  }
+  return tiles.sort(tileOrder)
 }
 
 /* ------------------------------------------------------------------ *

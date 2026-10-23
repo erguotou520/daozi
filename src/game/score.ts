@@ -162,7 +162,7 @@ export interface Rules {
   qingYiSeMozi: number
   /** 只子是否把副露张数算进该门张数 */
   zhiziIncludesMelds: boolean
-  /** 老小对：同花色同时有对 1 和对 9（可含碰/杠）（用户确认） */
+  /** 老小对：同花色 1 和 9 都成坎（至少 3 张，碰/杠也算，不能被顺子拆用） */
   laoXiaoDuiEnabled: boolean
   /** 双连号逢2加1：≥2 门小连号时每 2 门加 1 门小连号的分（用户确认） */
   doubleRunBonusEnabled: boolean
@@ -415,6 +415,21 @@ function isSevenPairs(concealed: Tile[], melds: Meld[]): boolean {
   return values.length > 0 && values.length <= 7 && values.every(n => n % 2 === 0)
 }
 
+/**
+ * 某一种拆解里，这一门的 1 / 9 是不是一个刻子。
+ * 老小对要求至少 3 张成坎，且不能被顺子拆用——11123 拆成 123 + 11 就没有 1 的刻子。
+ */
+function decompHasTriplet(decomp: Decomposition, suit: NumberSuit, rank: number): boolean {
+  return decomp.sets.some(
+    set =>
+      set.kind === 'triplet' &&
+      set.tiles.every(tile => {
+        const info = parseTile(tile)
+        return info.suit === suit && info.rank === rank
+      })
+  )
+}
+
 /* ------------------------------------------------------------------ *
  * 5. 各类牌型识别
  * ------------------------------------------------------------------ */
@@ -447,9 +462,9 @@ interface HandAnalysis {
   zhiziPoints: Record<NumberSuit, number>
   /** 每个数字的通点数 */
   tongPoints: Array<{ rank: number; points: number; count: number }>
-  /** 每门数字花色里每个数字的实际张数（含副露），用于老小对 */
+  /** 每门数字花色里每个数字的实际张数（含副露） */
   perSuitRankCounts: Record<NumberSuit, Map<number, number>>
-  /** 命中老小对的花色（同门同时有对 1 和对 9） */
+  /** 命中老小对的花色（同门 1、9 都成坎） */
   laoXiaoDuiSuit: NumberSuit | null
   numberSuitsInHand: Set<NumberSuit>
   hasHonor: boolean
@@ -635,12 +650,23 @@ function analyze(input: ScoreInput, rules: Rules): HandAnalysis {
     winTileOnlyWait = waits.length === 1 && waits[0] === winTile
   }
 
-  // 老小对：同一门里同时有对 1 和对 9（家里或碰/杠出来的都算）
+  // 老小对：同一门里 1 和 9 都要成坎（至少 3 张，碰/杠也算），
+  // 且不能被顺子拆用——11123 拆成 123 + 11 当将就不算。
+  // 1、9 可以一个来自碰/杠、一个来自手里的暗刻，但必须在同一种拆解里成立。
   let laoXiaoDuiSuit: NumberSuit | null = null
   if (rules.laoXiaoDuiEnabled) {
     for (const suit of NUMBER_SUITS) {
-      const ranks = perSuitRankCounts[suit]
-      if ((ranks.get(1) ?? 0) >= 2 && (ranks.get(9) ?? 0) >= 2) {
+      const meldRanks = new Set(
+        melds.map(meld => parseTile(meld.tile)).filter(info => info.suit === suit).map(info => info.rank)
+      )
+      const meldOne = meldRanks.has(1)
+      const meldNine = meldRanks.has(9)
+      const bothInMelds = meldOne && meldNine
+      // 手里的 1、9 必须能在同一种拆解里各自成刻；一个来自碰/杠、一个来自暗刻也可以
+      const bothInOneDecomp = decomp.some(
+        d => (meldOne || decompHasTriplet(d, suit, 1)) && (meldNine || decompHasTriplet(d, suit, 9))
+      )
+      if (bothInMelds || bothInOneDecomp) {
         laoXiaoDuiSuit = suit
         break
       }
@@ -900,13 +926,13 @@ export function scoreHand(input: ScoreInput): ScoreResult {
     })
   }
 
-  // 老小对：同一门里同时有对 1 和对 9
+  // 老小对：同一门里 1 和 9 都成坎
   if (enabled('老小对') && a.laoXiaoDuiSuit) {
     items.push({
       name: '老小对',
       points: rules.patternPoints.老小对,
       count: 1,
-      detail: `${a.laoXiaoDuiSuit} 同时有对 1 和对 9`
+      detail: `${a.laoXiaoDuiSuit} 有 1、9 的刻子`
     })
   }
 

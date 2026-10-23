@@ -57,7 +57,7 @@ export function extraOptions(rules: Rules = DEFAULT_RULES): ManualOption[] {
     { name: '对对胡', points: p.对对胡, hint: '全刻子加一对将' },
     { name: '七对', points: p.七对, hint: '七个对子' },
     { name: '大吊车', points: p.大吊车, hint: '四组碰后单吊将' },
-    { name: '老小对', points: p.老小对, hint: '同一门有对 1 和对 9' },
+    { name: '老小对', points: p.老小对, hint: '同一门 1、9 都成坎（≥3 张，不能拆进顺子）' },
     { name: '杠开', points: p.杠开, hint: '杠后补摸成牌' }
   ]
 }

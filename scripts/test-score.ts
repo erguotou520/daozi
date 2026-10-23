@@ -293,16 +293,16 @@ console.log('='.repeat(72))
   )
 }
 
-// 老小对：同一门同时有对 1 和对 9，碰出来的也算
+// 老小对：同一门 1 和 9 都要成坎（至少 3 张，碰/杠也算），对子、拆顺子都不算
 {
   const result = scoreHand({
-    concealed: ['9筒', '9筒', '2筒', '3筒', '4筒', '5筒', '6筒', '7筒', '1条', '2条', '3条'],
+    concealed: ['9筒', '9筒', '9筒', '2筒', '3筒', '4筒', '5筒', '6筒', '7筒', '9条', '9条'],
     melds: [pung('1筒')]
   })
   const laoXiaoDui = result.points.items.find(item => item.name === '老小对')
   console.log(`\n[老小对] ${result.details.join(' | ')}`)
-  check('碰出的对 1 + 手上的对 9 → 老小对', laoXiaoDui?.points ?? 0, 5)
-  check('老小对说明带花色', laoXiaoDui?.detail ?? '', '筒 同时有对 1 和对 9')
+  check('碰 1 筒 + 手里 999 筒 → 老小对', laoXiaoDui?.points ?? 0, 5)
+  check('老小对说明带花色', laoXiaoDui?.detail ?? '', '筒 有 1、9 的刻子')
 }
 
 // 通最多 8 通

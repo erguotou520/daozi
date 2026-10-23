@@ -9,6 +9,7 @@ import {
   legalActions,
   playableDiscards,
   remainingTiles,
+  revealHandTiles,
   settleHand,
   shortageTiles,
   wallVisualOf,
@@ -416,18 +417,10 @@ const TablePage = defineComponent({
       return hand.drawnTile
     })
 
-    /** 成牌后亮牌：按牌序排好，成牌张单独放在最右 */
+    /** 成牌后亮牌：按牌序排好，成牌张单独放在最右（自摸/接牌都补进来） */
     const revealTiles = (seat: number): Tile[] => {
       const hand = state.value
-      if (!hand) return []
-      const tiles = [...hand.players[seat].hand].sort(tileOrder)
-      const win = hand.winner
-      if (win && win.seat === seat && win.winTile) {
-        const index = tiles.indexOf(win.winTile)
-        if (index >= 0) tiles.splice(index, 1)
-        tiles.push(win.winTile)
-      }
-      return tiles
+      return hand ? revealHandTiles(hand, seat) : []
     }
 
     /** 手牌：排序后把刚摸到的那张单独放到最右，跟手牌区隔开 */
@@ -984,7 +977,7 @@ const TablePage = defineComponent({
                       )}
                       <span class="ml-1.5 text-brass">{playing ? seatPoints(0) : STARTING_POINTS} 点</span>
                       <span class="ml-1.5">
-                        {phase.value === 'dealing' ? dealtCounts.value[0] : (self?.hand.length ?? 0)} 张
+                        {phase.value === 'dealing' ? dealtCounts.value[0] : myHand.length} 张
                       </span>
                     </span>
                   )}

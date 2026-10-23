@@ -1,7 +1,7 @@
 import type { HandState } from '../game/game'
 import type { NumberSuit, Tile } from '../game/score'
-import { wallVisualOf } from '../game/game'
-import { meldTiles, parseTile, tileOrder } from '../game/score'
+import { revealHandTiles, wallVisualOf } from '../game/game'
+import { meldTiles, parseTile } from '../game/score'
 import { COLORS, HONOR_COLOR, SUIT_COLOR } from './theme'
 import { tileArt, TILE_CELL_H, TILE_CELL_W } from './tileArt'
 
@@ -919,7 +919,7 @@ export class Table3D {
         const openSuit = hand.threeToOneSeat === seat ? hand.threeToOneSuit : null
         const reveal = hand.phase === 'over' && winner === seat
         const tiles = reveal || openSuit
-          ? [...player.hand].sort(tileOrder)
+          ? revealHandTiles(hand, seat)
           : dealing
             ? player.hand.slice(0, dealtCounts?.[seat] ?? 0)
             : player.hand

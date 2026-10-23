@@ -17,6 +17,7 @@ import {
   legalActions,
   playableDiscards,
   remainingTiles,
+  revealHandTiles,
   settleHand,
   shortageTiles,
   threeToOneOf,
@@ -1325,15 +1326,7 @@ export class TableView {
 
   private revealTiles(seat: number): Tile[] {
     const hand = this.hand
-    if (!hand) return []
-    const tiles = [...hand.players[seat].hand].sort(tileOrder)
-    const win = hand.winner
-    if (win && win.seat === seat && win.winTile) {
-      const index = tiles.indexOf(win.winTile)
-      if (index >= 0) tiles.splice(index, 1)
-      tiles.push(win.winTile)
-    }
-    return tiles
+    return hand ? revealHandTiles(hand, seat) : []
   }
 
   private seatPoints(seat: number): number {
@@ -2016,7 +2009,7 @@ export class TableView {
 
     items.push(
       makeText(
-        `自己${hand.dealerSeat === 0 ? ' 东' : ''}${me.shortage ? `  缺${me.shortage}` : ''}${hand.threeToOneSeat === 0 && hand.threeToOneSuit ? `  亮${hand.threeToOneSuit}` : ''}  ${playing ? this.seatPoints(0) : STARTING_POINTS}点  ${this.phase === 'dealing' ? this.dealtCounts[0] : me.hand.length}张`,
+        `自己${hand.dealerSeat === 0 ? ' 东' : ''}${me.shortage ? `  缺${me.shortage}` : ''}${hand.threeToOneSeat === 0 && hand.threeToOneSuit ? `  亮${hand.threeToOneSuit}` : ''}  ${playing ? this.seatPoints(0) : STARTING_POINTS}点  ${this.phase === 'dealing' ? this.dealtCounts[0] : hand.phase === 'over' ? this.myHandTiles().length : me.hand.length}张`,
         { size: this.u(10), color: COLORS.mist, width: this.u(185), height: this.u(16) }
       )
     )
