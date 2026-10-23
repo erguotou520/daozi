@@ -17,7 +17,10 @@
  * 2. `wx.onShareAppMessage` / `wx.onShareTimeline` 只负责「用户点右上角菜单时」
  *    返回卡片标题和图片；主动分享不能用这两个接口。
  * 3. 游戏内按钮走 `wx.showShareImageMenu({ path })`（基础库 2.14.3+），弹「分享图片」面板；
- *    老版本没有这个接口时退回 `wx.shareAppMessage({ imageUrl: path })`。
+ *    这个接口能保存到相册，所以归在微信的「相册（仅写入）」隐私权限下：AppID 没在
+ *    MP 后台《用户隐私保护指引》里声明时，会直接返回
+ *    `showShareImageMenu:fail game appid no privacy api permission`，代码救不了，只能去后台配置。
+ *    没配之前退回 `wx.shareAppMessage({ imageUrl: path })`（转发卡片，卡片图就是截图，不需要隐私权限）。
  * 4. 朋友圈没有主动接口（官方原话：不支持在小游戏内直接发起分享），只能走右上角菜单。
  * 5. 不传 `imageUrl` 时微信拿当前游戏画面当卡片图（转发卡片 5:4，
  *    朋友圈预览图默认也是游戏画面截图）。
@@ -243,4 +246,9 @@ export function saveImageToAlbum(path: string, options: SaveAlbumOptions = {}): 
     options.onFail?.(String(error))
     return false
   }
+}
+
+/** 微信隐私权限没声明时的那类报错（代码无解，只能去 MP 后台配置） */
+export function isPrivacyError(reason: string): boolean {
+  return /privacy|scope is not declared|no privacy api permission|隐私/i.test(reason ?? '')
 }

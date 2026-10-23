@@ -47,6 +47,7 @@ import {
   SHARE_QUERY_FRIEND,
   initShare,
   isWechatMiniGame,
+  isPrivacyError,
   saveImageToAlbum,
   setShareCard,
   shareImage,
@@ -3067,7 +3068,20 @@ export class TableView {
     console.log('[share] 截图完成', path)
     // 微信「分享图片」弹窗：发送给朋友 / 收藏 / 下载
     const opened = shareImage(path, {
-      onFail: reason => this.offerSaveAlbum(path, reason)
+      onFail: reason => {
+        if (isPrivacyError(reason)) {
+          // 相册隐私权限没在 MP 后台声明：发图片、存相册都会被微信拒，代码无解。
+          // 退一步用转发卡片（卡片图就是这张截图），不依赖隐私权限。
+          console.warn('[share] 缺少相册隐私权限，改用转发卡片', reason)
+          if (shareToFriend({ imageUrl: path })) {
+            this.flash('微信还没开通「相册」隐私权限，先用转发卡片把这张截图发出去')
+          } else {
+            this.flash(`分享失败：${reason.slice(0, 60)}`)
+          }
+          return
+        }
+        this.offerSaveAlbum(path, reason)
+      }
     })
     if (!opened) this.offerSaveAlbum(path, '这台微信没有「分享图片」接口')
   }

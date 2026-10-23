@@ -21,6 +21,7 @@ import {
   currentShareCard,
   initShare,
   isWechatMiniGame,
+  isPrivacyError,
   saveImageToAlbum,
   setShareCard,
   shareImage,
@@ -214,6 +215,14 @@ console.log('\n七、存到相册（分享图片弹窗打不开时的退路）')
   const noAlbumApi: any = { showShareMenu() {} }
   check('没有 saveImageToPhotosAlbum 时返回 false', saveImageToAlbum('/tmp/daozi-shot.png', { wx: noAlbumApi }), false)
   check('没有 wx 时返回 false', saveImageToAlbum('/tmp/daozi-shot.png', { wx: null }), false)
+
+/* ------------------------------------------------------------------ */
+console.log('\n八、隐私权限报错识别（相册隐私没声明时只能去 MP 后台配置）')
+check('真机报的 privacy 错能识别', isPrivacyError('showShareImageMenu:fail game appid no privacy api permission'), true)
+check('scope 未声明能识别', isPrivacyError('api scope is not declared in the privacy agreement'), true)
+check('未同意隐私政策能识别', isPrivacyError('privacy permission is not authorized'), true)
+check('普通失败不误判', isPrivacyError('showShareImageMenu:fail path is invalid'), false)
+check('空字符串不误判', isPrivacyError(''), false)
 }
 
 /* ------------------------------------------------------------------ */
