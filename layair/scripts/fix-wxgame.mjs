@@ -18,6 +18,8 @@ const configPath = path.join(dir, 'project.config.json')
 const privatePath = path.join(dir, 'project.private.config.json')
 const adapterPath = path.join(dir, 'weapp-adapter.js')
 const APPID = process.env.WX_APPID || 'wx35973ee7b1494ae8'
+/** 微信小游戏屏幕方向：锁右侧横屏（不随手机左右翻转）。 */
+const ORIENTATION = process.env.WX_ORIENTATION || 'landscapeRight'
 
 if (!fs.existsSync(gamePath)) {
   console.error('找不到 release/wxgame/game.json，请先在 LayaAirIDE 里构建 wxgame')
@@ -49,7 +51,7 @@ if (fs.existsSync(adapterPath)) {
 }
 
 const game = JSON.parse(fs.readFileSync(gamePath, 'utf8'))
-game.deviceOrientation = 'landscape'
+game.deviceOrientation = ORIENTATION
 game.showStatusBar = false
 fs.writeFileSync(gamePath, `${JSON.stringify(game, null, 2)}\n`)
 
@@ -65,7 +67,7 @@ privateConfig.appid = APPID
 privateConfig.projectname = privateConfig.projectname || 'daozi'
 fs.writeFileSync(privatePath, `${JSON.stringify(privateConfig, null, 2)}\n`)
 
-console.log('wxgame: deviceOrientation = landscape, appid =', APPID)
+console.log(`wxgame: deviceOrientation = ${ORIENTATION}, appid =`, APPID)
 
 // 网页版：bundle.js 是固定文件名，浏览器会按启发式缓存一直拿旧包。
 // 构建后给 script 地址加一个缓存戳，普通刷新也能立刻换到新代码。

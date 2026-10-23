@@ -237,13 +237,19 @@ layair/
    - 微信开发者工具中 `project.private.config.json` 的 `appid` 优先级高于 `project.config.json`；即使 LayaAir 生成的 `project.config.json` 里没有 appid，也会读这个固定值。
    - 要换 AppID：改这个文件里的 `appid`（或执行 `WX_APPID=wx... node scripts/fix-wxgame.mjs`），下次构建仍然生效。
    - 如果开发者工具第一次导入仍显示游客 appid，在「详情 → 基本信息」里填一次 `wx35973ee7b1494ae8`；它会写回 `project.private.config.json`，而 LayaAir 构建不会删这个文件。
-4. `game.json` 需要横屏（`deviceOrientation: landscape`）。LayaAir 的 wxgame 插件会在构建末尾重新生成 `game.json`，所以仍需构建后执行一次：
+4. `game.json` 锁**右侧横屏**（`deviceOrientation: landscapeRight`），不会随手机左右翻转。
+   LayaAir 的 wxgame 插件只认「项目设置 → 屏幕缩放模式」（`PlayerSettings.json` 的
+   `resolution.screenMode`）：`horizontal` 写成 `landscape`，其余写成 `portrait`，**没有
+   `landscapeRight` 选项**；而且它在构建末尾把 `game.json` 整份合并覆盖，`build-templates`
+   里的方向也压不过它。所以构建后仍需执行一次收尾脚本：
 
    ```bash
    node scripts/fix-wxgame.mjs
    ```
 
-   脚本会把 `game.json` 改成横屏，并把 AppID 兜底写进 `project.config.json` / `project.private.config.json`（默认 `wx35973ee7b1494ae8`，可用 `WX_APPID` 覆盖）。
+   脚本会把 `game.json` 写成 `landscapeRight`（可用 `WX_ORIENTATION=landscapeLeft|landscape|portrait` 临时覆盖），
+   并把 AppID 兜底写进 `project.config.json` / `project.private.config.json`（默认 `wx35973ee7b1494ae8`，可用 `WX_APPID` 覆盖）。
+   `screenMode` 保持默认的 `none`：横屏布局由 `Main.ts` 自己按画布宽高算，不再让 Laya 运行时二次旋转。
 
 > 微信开发者工具需要先用自己的微信登录。构建产物已经验证过结构、3D 所需引擎库（`laya.d3.js` / `laya.webgl_3D.js`）、横屏配置和固定 AppID；真机预览 / 上传要在登录后的开发者工具里完成。
 
