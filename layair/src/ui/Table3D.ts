@@ -913,7 +913,9 @@ export class Table3D {
     for (let seat = 0; seat < 4; seat += 1) {
       const player = hand.players[seat]
       if (seat === 0) {
-        this.addSeatHand(0, selfTiles, true, selfTiles.length - 1, selfView?.selectedIndex ?? -1, selfView?.dimTiles)
+        // 亮牌只有真拿到成牌张时才把最后一张当「刚摸/成的」错开
+        const selfWinTile = hand.phase === 'over' ? hand.winner?.seat === 0 && !!hand.winner.winTile : true
+        this.addSeatHand(0, selfTiles, true, selfWinTile ? selfTiles.length - 1 : -1, selfView?.selectedIndex ?? -1, selfView?.dimTiles)
       } else {
         // 三打一：明牌家只翻开三家缺的那门，其余手牌仍扣着
         const openSuit = hand.threeToOneSeat === seat ? hand.threeToOneSuit : null

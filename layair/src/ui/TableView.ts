@@ -29,7 +29,7 @@ import {
 import { ROUNDS_PER_CIRCLE, dealTrace, seatFromDice } from '../game/table'
 import { createMatch, endHand, startHand, STARTING_POINTS, type MatchState } from '../game/match'
 import { meldTiles, parseTile, tileOrder, type Meld, type NumberSuit, type Tile } from '../game/score'
-import { COLORS, FONT_SERIF, SEAT_NAMES, TILE_FACE_RATIO, TILE_RATIO } from './theme'
+import { BUILD_TAG, COLORS, FONT_SERIF, SEAT_NAMES, TILE_FACE_RATIO, TILE_RATIO } from './theme'
 import { DiceView, drawShareGlyph, drawSpeakerGlyph, makeButton, makePanel, makeText, makeWallStack, TileView } from './widgets'
 import { Table3D } from './Table3D'
 import { voice } from '../audio/voice'
@@ -202,6 +202,7 @@ export class TableView {
   private viewH = 0
 
   constructor(owner: Laya.Sprite, viewport?: { rotate: boolean; width: number; height: number }) {
+    console.log(`[daozi] build ${BUILD_TAG}`)
     this.owner = owner
     this.rotateLandscape = viewport?.rotate ?? false
     this.viewW = viewport?.width ?? Laya.stage.width
@@ -1711,7 +1712,8 @@ export class TableView {
     if (!tiles.length) return
     const gap = Math.max(2, Math.round(m.handW * 0.04))
     // 成牌张单独留一道缝：接牌和自摸都把成的那一张和手牌分开，一眼看得出是哪只成的
-    const winTileGap = hand.phase === 'over' && hand.winner?.seat === 0 && tiles.length > 1 ? this.u(16) : 0
+    const winTileGap =
+      hand.phase === 'over' && hand.winner?.seat === 0 && !!hand.winner.winTile && tiles.length > 1 ? this.u(16) : 0
     let handW = m.handW
     let handH = m.handH
     let handRowW = tiles.length * (handW + gap) - gap + winTileGap
@@ -3495,6 +3497,18 @@ export class TableView {
         height: this.u(30),
         x: px,
         y: py + this.u(10)
+      })
+    )
+    // 构建批次放右上角：真机/体验版是不是新包，打开战绩就能核对
+    this.overlay.addChild(
+      makeText(`构建 ${BUILD_TAG}`, {
+        size: this.u(9),
+        color: COLORS.mist,
+        align: 'right',
+        width: this.u(120),
+        height: this.u(14),
+        x: px + panelW - this.u(128),
+        y: py + this.u(16)
       })
     )
 

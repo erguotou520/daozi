@@ -61,3 +61,10 @@ export const TILE_BAND_RATIO = 0.18
 export const TILE_RATIO = TILE_FACE_RATIO + TILE_BAND_RATIO
 
 export const SEAT_NAMES = ['自己', '下家', '对面', '上家']
+
+/**
+ * 构建批次：每次发版手动改这里，战绩面板底部会显示。
+ * 真机 / 微信体验版是否已经换成新包，一眼就能对上；排查「明明改了却没生效」时先看它。
+ */
+export const BUILD_TAG = '2026-10-23 16:30'
+

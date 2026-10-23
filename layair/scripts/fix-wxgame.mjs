@@ -66,3 +66,18 @@ privateConfig.projectname = privateConfig.projectname || 'daozi'
 fs.writeFileSync(privatePath, `${JSON.stringify(privateConfig, null, 2)}\n`)
 
 console.log('wxgame: deviceOrientation = landscape, appid =', APPID)
+
+// 网页版：bundle.js 是固定文件名，浏览器会按启发式缓存一直拿旧包。
+// 构建后给 script 地址加一个缓存戳，普通刷新也能立刻换到新代码。
+const webIndex = path.join(root, 'release/web/index.html')
+if (fs.existsSync(webIndex)) {
+  const stamp = Date.now().toString(36)
+  const html = fs.readFileSync(webIndex, 'utf8')
+  const next = html.replace(/(src="js\/bundle\.js)(\?[^"]*)?(")/, `$1?v=${stamp}$3`)
+  if (next !== html) {
+    fs.writeFileSync(webIndex, next)
+    console.log('web: index.html bundle.js 缓存戳 =', stamp)
+  } else {
+    console.warn('web: 没找到 js/bundle.js 的 script 标签，跳过缓存戳')
+  }
+}
