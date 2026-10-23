@@ -173,6 +173,18 @@ const luanfen = buildWinAnnouncement({
 })
 equal('乱分只喊清一色', ids(luanfen), ['hu', 'qingyise', 'dana'])
 
+// —— 三打一：成牌不喊，触发时另有提示 ——
+const three = buildWinAnnouncement({
+  selfDraw: true,
+  afterKong: false,
+  score: fakeScore({
+    total: 18,
+    items: ['成牌', '三打一'],
+    mozi: ['三打一']
+  })
+})
+check('成牌不喊三打一', !ids(three).includes('sandayi'), ids(three).join(','))
+
 // —— 连号 / 不动手不播 ——
 const quiet = buildWinAnnouncement({
   selfDraw: true,

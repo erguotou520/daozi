@@ -80,7 +80,6 @@ const PATTERNS: PatternRule[] = [
   { id: 'sangang', weight: 70, match: s => flag(s, '三杠') },
   { id: 'sandakan', weight: 70, match: s => flag(s, '三大坎+同门2张') },
   { id: 'qingshui', weight: 65, match: s => hasMozi(s, '清水') },
-  { id: 'sandayi', weight: 60, match: s => hasItem(s, '三打一') || hasMozi(s, '三打一') },
   { id: 'caoyise', weight: 50, match: s => hasItem(s, '草一色') },
   { id: 'sihuo', weight: 45, match: s => hasItem(s, '四活') },
   { id: 'bangbang', weight: 40, match: s => hasItem(s, '棒棒') },

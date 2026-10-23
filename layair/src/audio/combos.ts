@@ -31,8 +31,6 @@ export const VOICE_COMBOS: VoiceCombo[] = [
   { id: "c_zimo_dadiaoche_dana", sequence: ["zimo", "dadiaoche", "dana"], text: "自摸大吊车大拿！" },
   { id: "c_zimo_qingyise_duiduihu", sequence: ["zimo", "qingyise", "duiduihu"], text: "自摸清一色对对胡！" },
   { id: "c_zimo_qingyise_duiduihu_dana", sequence: ["zimo", "qingyise", "duiduihu", "dana"], text: "自摸清一色对对胡大拿！" },
-  { id: "c_zimo_sandayi", sequence: ["zimo", "sandayi"], text: "自摸三打一！" },
-  { id: "c_zimo_qingyise_sandayi", sequence: ["zimo", "qingyise", "sandayi"], text: "自摸清一色三打一！" },
   { id: "c_ganghousaihua_qingyise", sequence: ["ganghousaihua", "qingyise"], text: "杠后赛花清一色！" },
   { id: "c_ganghousaihua_duiduihu", sequence: ["ganghousaihua", "duiduihu"], text: "杠后赛花对对胡！" },
   { id: "c_ganghousaihua_qingyise_dana", sequence: ["ganghousaihua", "qingyise", "dana"], text: "杠后赛花清一色大拿！" },

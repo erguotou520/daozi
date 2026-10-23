@@ -88,7 +88,8 @@
       "group": "tile",
       "tiers": [
         1
-      ]
+      ],
+      "speed": 1.1
     },
     {
       "id": "tong3",
@@ -128,7 +129,8 @@
       "group": "tile",
       "tiers": [
         1
-      ]
+      ],
+      "speed": 1.1
     },
     {
       "id": "tong8",

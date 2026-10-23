@@ -187,7 +187,7 @@ def main() -> int:
                     "group": phrase.get("group", "pattern"),
                     "tier": tier,
                     "label": phrase.get("label") or phrase["text"],
-                    "speed": speed_for(phrase.get("group", "pattern"), tier),
+                    "speed": phrase.get("speed", speed_for(phrase.get("group", "pattern"), tier)),
                 }
             )
     for combo in combos:
