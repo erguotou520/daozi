@@ -127,7 +127,7 @@ export interface Rules {
     老小对: number
     三打一: number
     杠开: number
-    /** 枯只压：压当且成牌张是场上最后一张；是压当的更强情形，算它就不再算压当 */
+    /** 枯只压：压当且成牌张是场上最后一张（整十的 20 点，压当那 1 点另算，合计 21） */
     枯只压: number
   }
   /** 大拿：直接命中即大拿的牌型名 */
@@ -901,11 +901,12 @@ export function scoreHand(input: ScoreInput): ScoreResult {
   const isYaDang = a.winTileOnlyWait && (a.winTileRole === 'middle' || a.winTileRole === 'edge')
   const isDanDiao = a.winTileOnlyWait && a.winTileRole === 'pair'
   // 枯只压 = 压当 + 成牌张是场上最后一张（另外三张都已亮在桌上）。
-  // 它比压当更具体：算枯只压就不再叠加压当的 1 点（用户口径：枯只压本身是 20 点整）。
+  // 点数 = 牌型 20 点（整十）+ 压当那 1 点，合计 21；自摸 ×2 后最小一手
+  // (4 + 20 + 1) × 2 = 50 点，正好压到大拿线。
   const isKuZhiYa = isYaDang && (input.visibleWinTileCount ?? 0) >= 3
   if (isYaDang) patterns['压当'] = true
   if (isDanDiao) patterns['单吊'] = true
-  if (isYaDang && !isKuZhiYa && enabled('压当')) {
+  if (isYaDang && enabled('压当')) {
     items.push({
       name: '压当',
       points: rules.patternPoints.压当,

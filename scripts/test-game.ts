@@ -554,8 +554,8 @@ console.log('='.repeat(72))
   check('自摸枯只压 = 3 个大摸子', selfScore?.mozi.big, 3)
   // 枯只压点数是在压当之外额外加：底 4 + 碰 1 + 小连号 5 + 四活 10 + 压当 1 + 枯只压 21 = 42
   check('枯只压 +20 点（整十）', selfScore?.points.items.find(i => i.name === '枯只压')?.points, 20)
-  check('枯只压成牌不再叠加压当', selfScore?.points.items.some(i => i.name === '压当'), false)
-  check('自摸枯只压 = 40 × 2 = 80 点', selfScore?.points.total, 80)
+  check('枯只压照算压当的 1 点', selfScore?.points.items.find(i => i.name === '压当')?.points, 1)
+  check('自摸枯只压 = 41 × 2 = 82 点', selfScore?.points.total, 82)
   // 84 点 ≥ 大拿线 50，所以自摸枯只压必是大拿：40 元/家 + 摸子 30 元/家
   check('自摸枯只压按大拿结算', selfScore?.bigWin.isBigWin, true)
   check('自摸枯只压每家 70 元（大拿 40 + 摸子 30）', selfScore?.money.perOpponentTotal, 70)
@@ -575,7 +575,7 @@ console.log('='.repeat(72))
   check('接牌：同样算枯只压', claimScore?.mozi.items.some(i => i.name === '枯只压'), true)
   check('枯只压接牌 = 1 个大摸子', `${claimScore?.mozi.big} 大 + ${claimScore?.mozi.small} 小`, '1 大 + 0 小')
   // 接牌不乘自摸倍数：42 点，还没到大拿线
-  check('接牌枯只压 = 40 点', claimScore?.points.total, 40)
+  check('接牌枯只压 = 41 点', claimScore?.points.total, 41)
   check('接牌枯只压不是大拿', claimScore?.bigWin.isBigWin, false)
   check('接牌每家 30 元（点数 20 + 摸子 10）', claimScore?.money.perOpponentTotal, 30)
 
