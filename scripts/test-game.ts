@@ -591,6 +591,46 @@ console.log('='.repeat(72))
 
 /* ------------------------------------------------------------------ */
 console.log('\n' + '='.repeat(72))
+console.log('11. 抢杠是接牌：不继承上一杠的杠后赛花')
+console.log('='.repeat(72))
+{
+  // 座位 1 碰了 2 万、手里第四张准备加杠；他上一杠刚补摸完（afterKong 还没被出牌清掉）。
+  // 座位 0 对倒 2 万，抢杠成牌——抢杠是接牌，不能算杠开/杠后赛花，也不能把摸子翻倍。
+  const state = createHand({
+    diceA: 3,
+    diceB: 3,
+    hands: [
+      ['2万', '2万', '4筒', '5筒', '6筒', '7筒', '8筒', '9筒', '1条', '2条', '3条', '南', '南'],
+      ['2万', '1条', '4条', '5条', '6条', '7条', '8条', '西', '西', '西', '北', '北', '白'],
+      ['5万', '5万', '6万', '6万', '7万', '7万', '2条', '2条', '3条', '3条', '发', '发', '白'],
+      ['5条', '5条', '6条', '6条', '7条', '7条', '2筒', '2筒', '3筒', '3筒', '中', '中', '白']
+    ],
+    piles: [['9筒'], ['9筒'], ['9筒'], ['9筒']],
+    aiSeats: []
+  })
+  for (const player of state.players) player.shortage = null as any
+  state.players[1].melds = [{ kind: '碰', tile: '2万' }]
+  state.players[1].hand = ['2万', '1条', '4条', '5条', '6条', '7条', '8条', '西', '西', '西', '北', '北', '白']
+  state.phase = 'discard'
+  state.turn = 1
+  state.drawnTile = '2万'
+  state.afterKong = true // 上一杠刚补摸完，还没出牌
+
+  const robbed = applyAction(state, { type: 'kong', seat: 1, kind: '加杠', tile: '2万' } as RoundAction)
+  check('加杠被抢 → 进入抢杠阶段', robbed.phase, 'rob-kong')
+  check('抢杠候选是座位 0', robbed.robKong?.pending.join(','), '0')
+
+  const won = applyAction(robbed, { type: 'win', seat: 0, robKong: true } as RoundAction)
+  const score = won.winner!.score
+  check('抢杠成牌是接牌', won.winner!.selfDraw, false)
+  check('成牌张凑成刻子 → 借牌按碰算', score.points.items.some(item => (item.detail ?? '').includes('借牌')), true)
+  check('抢杠不算杠开', score.points.items.some(item => item.name === '杠开'), false)
+  check('抢杠摸子不翻倍', score.mozi.multiplier, 1)
+  check('抢杠不显示杠后赛花', score.details.some(line => line.includes('杠后赛花')), false)
+}
+
+/* ------------------------------------------------------------------ */
+console.log('\n' + '='.repeat(72))
 console.log(`${checks - failures}/${checks} 项通过${failures ? `，${failures} 项失败` : ''}`)
 console.log('='.repeat(72))
 

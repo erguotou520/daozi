@@ -317,7 +317,7 @@ section('2. 成牌张相关：压当、单吊、枯只压、老小对')
   check('外面出 3 张 + 只能等 5 筒 → 枯只压', ku.mozi.items.some(i => i.name === '枯只压'), true)
   check('枯只压接牌 = 1 个大摸子', `${ku.mozi.big} 大 + ${ku.mozi.small} 小`, '1 大 + 0 小')
   check('枯只压 +20 点（整十）', itemPoints({ concealed, melds, winTile: '5筒', visibleWinTileCount: 3 }, '枯只压'), 20)
-  check('枯只压照算压当（20 + 1 = 21）', itemPoints({ concealed, melds, winTile: '5筒', visibleWinTileCount: 3 }, '压当'), 1)
+  check('枯只压照算压当的 1 点', itemPoints({ concealed, melds, winTile: '5筒', visibleWinTileCount: 3 }, '压当'), 1)
 
   const kuSelf = scoreBoth('枯只压自摸', { concealed, melds, winTile: '5筒', visibleWinTileCount: 3, selfDraw: true })
   check('枯只压自摸 = 3 大', `${kuSelf.mozi.big} 大 + ${kuSelf.mozi.small} 小`, '3 大 + 0 小')

@@ -1009,7 +1009,8 @@ function resolveWin(
     selfDraw,
     visibleWinTileCount: visible,
     isFirstHand: state.isFirstHand,
-    isAfterKong: state.afterKong,
+    // 杠后赛花只认自摸（杠后补摸成牌）：抢杠是接牌，不能继承上一杠的 afterKong
+    isAfterKong: state.afterKong && selfDraw,
     threeToOne,
     singlePayer,
     // 大拿规则：一把成牌的点数 ≥ 其他三家剩余点数时，三家全部清零

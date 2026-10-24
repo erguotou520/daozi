@@ -104,7 +104,7 @@ export function moziOptions(rules: Rules = DEFAULT_RULES): MoziOption[] {
       doublesPoints: false,
       doublesMozi: false,
       exclusiveGroup: 'win-style',
-      hint: '压当中张且外面已出 3 张；牌型 20 点，压当的 1 点另勾（合计 21）；自摸 3 个大摸子、接牌 1 个'
+      hint: '压当中张且外面已出 3 张；牌型 20 点（压当的 1 点另勾）；自摸 3 个大摸子、接牌 1 个'
     },
     {
       name: '三打一',
