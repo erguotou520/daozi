@@ -99,12 +99,12 @@ export function moziOptions(rules: Rules = DEFAULT_RULES): MoziOption[] {
     },
     {
       name: '枯只压',
-      points: 21,
+      points: rules.patternPoints.枯只压,
       units: rules.kuZhiYaMozi.selfDraw,
       doublesPoints: false,
       doublesMozi: false,
       exclusiveGroup: 'win-style',
-      hint: '压当中张且外面已出 3 张；自摸 3 个大摸子'
+      hint: '压当中张且外面已出 3 张（算它就不再算压当）；自摸 3 个大摸子、接牌 1 个'
     },
     {
       name: '三打一',
@@ -203,7 +203,7 @@ export function scoreManualSelection(
   const bigWinReasons: string[] = []
   for (const name of selection.bigWin) bigWinReasons.push(`命中大拿牌型「${name}」`)
   const values = new Set(items.map(item => item.points))
-  if (values.has(31) && values.has(10)) bigWinReasons.push('两个大牌型（31 点 + 10 点），即七对 + 四活')
+  if (values.has(30) && values.has(10)) bigWinReasons.push('两个大牌型（30 点 + 10 点），即七对 + 四活')
   if (total >= rules.bigWinThreshold) bigWinReasons.push(`${total} 点 ≥ ${rules.bigWinThreshold} 点`)
   const isBigWin = bigWinReasons.length > 0
 

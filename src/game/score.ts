@@ -127,7 +127,7 @@ export interface Rules {
     老小对: number
     三打一: number
     杠开: number
-    /** 枯只压：压当且成牌张是场上最后一张，额外加点（与压当的点数叠加） */
+    /** 枯只压：压当且成牌张是场上最后一张；是压当的更强情形，算它就不再算压当 */
     枯只压: number
   }
   /** 大拿：直接命中即大拿的牌型名 */
@@ -185,14 +185,14 @@ export const DEFAULT_RULES: Rules = {
     不动手: 5,
     草一色: 10,
     对对胡: 10,
-    七对: 31,
-    大吊车: 31,
+    七对: 30,
+    大吊车: 30,
     老小对: 5,
     三打一: 5,
     杠开: 5,
-    枯只压: 21
+    枯只压: 20
   },
-  // 七对本身不是大拿，七对 + 四活 由 bigWinPairs（31 + 10）触发；双连号、双杠已不再是大拿
+  // 七对本身不是大拿，七对 + 四活 由 bigWinPairs（30 + 10）触发；双连号、双杠已不再是大拿
   bigWinPatterns: [
     '清一色',
     '双棒棒',
@@ -206,7 +206,7 @@ export const DEFAULT_RULES: Rules = {
     '大吊车'
   ],
   bigWinThreshold: 50,
-  bigWinPairs: [[31, 10]],
+  bigWinPairs: [[30, 10]],
   bigWinZeroesOpponents: true,
   bigWinMoneyPerPlayer: 40,
   pointYuan: 0.5,
@@ -216,7 +216,7 @@ export const DEFAULT_RULES: Rules = {
   kongOpenDoublesMozi: true,
   kongOpenAddsBigMozi: false,
   anGangCountsAsBuDongShou: true,
-  kuZhiYaMozi: { deal: 1.5, selfDraw: 3 },
+  kuZhiYaMozi: { deal: 1, selfDraw: 3 },
   qingShuiMozi: 1.5,
   qingYiSeMozi: 1,
   zhiziIncludesMelds: true,
@@ -900,9 +900,12 @@ export function scoreHand(input: ScoreInput): ScoreResult {
   // 单吊＝唯一成牌张正好是补将牌。两面听（23 等 1、4）两种都能成，不算。
   const isYaDang = a.winTileOnlyWait && (a.winTileRole === 'middle' || a.winTileRole === 'edge')
   const isDanDiao = a.winTileOnlyWait && a.winTileRole === 'pair'
+  // 枯只压 = 压当 + 成牌张是场上最后一张（另外三张都已亮在桌上）。
+  // 它比压当更具体：算枯只压就不再叠加压当的 1 点（用户口径：枯只压本身是 20 点整）。
+  const isKuZhiYa = isYaDang && (input.visibleWinTileCount ?? 0) >= 3
   if (isYaDang) patterns['压当'] = true
   if (isDanDiao) patterns['单吊'] = true
-  if (isYaDang && enabled('压当')) {
+  if (isYaDang && !isKuZhiYa && enabled('压当')) {
     items.push({
       name: '压当',
       points: rules.patternPoints.压当,
@@ -913,10 +916,6 @@ export function scoreHand(input: ScoreInput): ScoreResult {
   if (isDanDiao && enabled('单吊')) {
     items.push({ name: '单吊', points: rules.patternPoints.单吊, count: 1, detail: '成牌张补将牌' })
   }
-
-  // 枯只压：压当（卡张/边张、只等这一张）成牌，且成牌张是场上最后一张。
-  // 点数是在压当之外**额外**加；摸子另算（接牌 1.5 大 / 自摸 3 大，两者互斥）。
-  const isKuZhiYa = isYaDang && (input.visibleWinTileCount ?? 0) >= 3
   if (isKuZhiYa && enabled('枯只压')) {
     items.push({
       name: '枯只压',
@@ -1008,7 +1007,7 @@ export function scoreHand(input: ScoreInput): ScoreResult {
     moziItems.push({
       name: '枯只压',
       units,
-      detail: `只等这一张且该牌外面已出 3 张，${input.selfDraw ? '自摸' : '接牌'} ${units} 个大摸子`
+      detail: `只等这一张且该牌另外三张都已亮在桌上，${input.selfDraw ? '自摸 3 个大摸子' : '接牌 1 个大摸子'}`
     })
   } else if (isYaDang && enabled('压当')) {
     moziItems.push({ name: '压当', units: 1, detail: '压当成牌，1 个大摸子' })

@@ -315,8 +315,9 @@ section('2. 成牌张相关：压当、单吊、枯只压、老小对')
   // 枯只压：卡张 5筒且外面已经出了 3 张
   const ku = scoreBoth('枯只压接牌', { concealed, melds, winTile: '5筒', visibleWinTileCount: 3 })
   check('外面出 3 张 + 只能等 5 筒 → 枯只压', ku.mozi.items.some(i => i.name === '枯只压'), true)
-  check('枯只压接牌 = 1 大 + 1 小', `${ku.mozi.big} 大 + ${ku.mozi.small} 小`, '1 大 + 1 小')
-  check('枯只压额外 +21 点（与压当叠加）', itemPoints({ concealed, melds, winTile: '5筒', visibleWinTileCount: 3 }, '枯只压'), 21)
+  check('枯只压接牌 = 1 个大摸子', `${ku.mozi.big} 大 + ${ku.mozi.small} 小`, '1 大 + 0 小')
+  check('枯只压 +20 点（整十）', itemPoints({ concealed, melds, winTile: '5筒', visibleWinTileCount: 3 }, '枯只压'), 20)
+  check('枯只压成牌不再叠加压当', itemPoints({ concealed, melds, winTile: '5筒', visibleWinTileCount: 3 }, '压当'), 0)
 
   const kuSelf = scoreBoth('枯只压自摸', { concealed, melds, winTile: '5筒', visibleWinTileCount: 3, selfDraw: true })
   check('枯只压自摸 = 3 大', `${kuSelf.mozi.big} 大 + ${kuSelf.mozi.small} 小`, '3 大 + 0 小')
@@ -374,7 +375,7 @@ section('2. 成牌张相关：压当、单吊、枯只压、老小对')
     concealed: ['1筒', '1筒', '9筒', '9筒', '2筒', '2筒', '3筒', '3筒', '4条', '4条', '5条', '5条', '6条', '6条']
   }
   check('只有对 1 + 对 9（各 2 张）→ 不算老小对', itemPoints(laoXiaoPairs, '老小对'), 0)
-  check('但仍是七对', itemPoints(laoXiaoPairs, '七对'), 31)
+  check('但仍是七对', itemPoints(laoXiaoPairs, '七对'), 30)
 
   // 11123 拆成 123 + 11：三张 1 被顺子拆走一张，不算坎
   const laoXiaoSplit = {
@@ -400,7 +401,7 @@ section('3. 七对、大吊车、三打一、杠开、清水')
     concealed: ['1筒', '1筒', '5筒', '5筒', '2条', '2条', '8条', '8条', '3万', '3万', '7万', '7万', '东', '东']
   }
   const seven = scoreBoth('普通七对', sevenPairs)
-  check('七个对子 → 七对 +31', itemPoints(sevenPairs, '七对'), 31)
+  check('七个对子 → 七对 +30', itemPoints(sevenPairs, '七对'), 30)
   check('普通七对不是大拿', seven.bigWin.isBigWin, false)
 
   const daDiaoChe = {
@@ -410,7 +411,7 @@ section('3. 七对、大吊车、三打一、杠开、清水')
   }
   const daDiao = scoreBoth('大吊车', daDiaoChe)
   check('四组碰 + 单吊 → 大吊车', daDiao.patterns['大吊车'], true)
-  check('大吊车 +31', itemPoints(daDiaoChe, '大吊车'), 31)
+  check('大吊车 +30（成牌天然单吊，另有单吊 +1）', itemPoints(daDiaoChe, '大吊车'), 30)
   check('大吊车是大拿', daDiao.bigWin.isBigWin, true)
   check('大吊车单吊摸子 1 大', daDiao.mozi.units, 1)
 
@@ -478,7 +479,7 @@ section('4. 大拿牌型：清一色、双通、双棒棒、双四活、一一�
         concealed: ['2万', '2万', '3万', '3万', '4万', '4万', '2筒', '2筒', '3筒', '3筒', '4筒', '4筒', '5条', '5条']
       },
       pattern: '双棒棒',
-      total: 50
+      total: 49
     },
     {
       label: '双四活',
@@ -486,7 +487,7 @@ section('4. 大拿牌型：清一色、双通、双棒棒、双四活、一一�
         concealed: ['1万', '1万', '1万', '1万', '2万', '2万', '2万', '2万', '3筒', '3筒', '4筒', '4筒', '5条', '5条']
       },
       pattern: '双四活',
-      total: 61
+      total: 60
     },
     {
       label: '一一九',

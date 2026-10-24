@@ -553,9 +553,9 @@ console.log('='.repeat(72))
   check('自摸：自己碰出去的 3 张也算已出 → 枯只压', selfScore?.mozi.items.some(i => i.name === '枯只压'), true)
   check('自摸枯只压 = 3 个大摸子', selfScore?.mozi.big, 3)
   // 枯只压点数是在压当之外额外加：底 4 + 碰 1 + 小连号 5 + 四活 10 + 压当 1 + 枯只压 21 = 42
-  check('枯只压额外 +21 点', selfScore?.points.items.find(i => i.name === '枯只压')?.points, 21)
-  check('押当的点数照算（与枯只压叠加）', selfScore?.points.items.find(i => i.name === '压当')?.points, 1)
-  check('自摸枯只压 = 42 × 2 = 84 点', selfScore?.points.total, 84)
+  check('枯只压 +20 点（整十）', selfScore?.points.items.find(i => i.name === '枯只压')?.points, 20)
+  check('枯只压成牌不再叠加压当', selfScore?.points.items.some(i => i.name === '压当'), false)
+  check('自摸枯只压 = 40 × 2 = 80 点', selfScore?.points.total, 80)
   // 84 点 ≥ 大拿线 50，所以自摸枯只压必是大拿：40 元/家 + 摸子 30 元/家
   check('自摸枯只压按大拿结算', selfScore?.bigWin.isBigWin, true)
   check('自摸枯只压每家 70 元（大拿 40 + 摸子 30）', selfScore?.money.perOpponentTotal, 70)
@@ -573,11 +573,11 @@ console.log('='.repeat(72))
   const claimedWin = applyAction(afterDiscard, { type: 'claim', seat: 0, claim: '成' })
   const claimScore = claimedWin.winner?.score
   check('接牌：同样算枯只压', claimScore?.mozi.items.some(i => i.name === '枯只压'), true)
-  check('枯只压接牌 = 1 大 + 1 小', `${claimScore?.mozi.big} 大 + ${claimScore?.mozi.small} 小`, '1 大 + 1 小')
+  check('枯只压接牌 = 1 个大摸子', `${claimScore?.mozi.big} 大 + ${claimScore?.mozi.small} 小`, '1 大 + 0 小')
   // 接牌不乘自摸倍数：42 点，还没到大拿线
-  check('接牌枯只压 = 42 点', claimScore?.points.total, 42)
+  check('接牌枯只压 = 40 点', claimScore?.points.total, 40)
   check('接牌枯只压不是大拿', claimScore?.bigWin.isBigWin, false)
-  check('接牌每家 35 元（点数 20 + 摸子 15）', claimScore?.money.perOpponentTotal, 35)
+  check('接牌每家 30 元（点数 20 + 摸子 10）', claimScore?.money.perOpponentTotal, 30)
 
   // 边界：自己的碰不是 2 万、外面只出了 2 张 → 不是枯只压（还是普通压当）
   const few = setup(true)
