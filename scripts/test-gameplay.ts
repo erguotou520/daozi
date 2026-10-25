@@ -429,19 +429,34 @@ section('2.5 三大坎：同门三坎 + 数字连着；字牌任意三坎')
   check('碰出来的同门连坎 → 三大坎 +10', itemPoints(withMelds, '三大坎'), 10)
   check('同门连坎 + 同门将 → 大拿「三大坎+同门2张」', scoreBoth('碰出三大坎', withMelds).patterns['三大坎+同门2张'], true)
 
-  // 字牌：字牌没有顺序，任意三组字坎都算，中发白直接大拿
-  const honors = {
+  // 中发白：只有这 3 种箭牌，凑三坎最难，将牌不必是分牌 → 直接大拿
+  const dragons = {
     concealed: ['中', '中', '中', '发', '发', '发', '白', '白', '白', '1万', '2万', '3万', '9万', '9万'],
     winTile: '9万'
   }
-  check('中发白三组字坎 → 三大坎 +10', itemPoints(honors, '三大坎'), 10)
-  check('中发白三组字坎 → 直接大拿（将不必是分牌）', scoreBoth('字牌三坎', honors).patterns['三大坎+同门2张'], true)
+  check('中发白三组字坎 → 三大坎 +10', itemPoints(dragons, '三大坎'), 10)
+  check('中发白 + 数字将 → 直接大拿（不需要字对）', scoreBoth('中发白', dragons).patterns['三大坎+同门2张'], true)
+
+  // 其它字牌三坎（中/东/南）：三大坎照算，但大拿要再配一对字牌
+  const mixedHonors = {
+    concealed: ['中', '中', '中', '东', '东', '东', '南', '南', '南', '1万', '2万', '3万', '9万', '9万'],
+    winTile: '9万'
+  }
+  check('中/东/南 三坎 → 三大坎 +10', itemPoints(mixedHonors, '三大坎'), 10)
+  check('中/东/南 + 数字将 → 不算大拿牌型（要补一对字）', scoreBoth('混合字坎数字将', mixedHonors).patterns['三大坎+同门2张'], false)
+
+  const mixedHonorsPair = {
+    concealed: ['中', '中', '中', '东', '东', '东', '南', '南', '南', '1万', '2万', '3万', '西', '西'],
+    winTile: '西'
+  }
+  check('中/东/南 + 一对字牌 → 大拿', scoreBoth('混合字坎字将', mixedHonorsPair).patterns['三大坎+同门2张'], true)
 
   const otherHonors = {
     concealed: ['东', '东', '东', '南', '南', '南', '西', '西', '西', '1万', '2万', '3万', '8万', '8万'],
     winTile: '8万'
   }
   check('任意三组字坎（东南西）也算三大坎', itemPoints(otherHonors, '三大坎'), 10)
+  check('但风牌三坎 + 数字将 → 不算大拿', scoreBoth('风牌三坎数字将', otherHonors).patterns['三大坎+同门2张'], false)
 
   // 只有两组刻子不算
   const twoKans = {

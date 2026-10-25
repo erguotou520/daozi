@@ -451,6 +451,8 @@ interface HandAnalysis {
   tripletSuits: Map<Suit, number>
   /** 每门刻子/杠的数字（数字牌要判断「连着」，字牌不计） */
   tripletRanks: Map<Suit, number[]>
+  /** 所有刻子/杠的牌面（判断「中发白」三坎用） */
+  tripletTiles: Tile[]
   /** 将牌所在的花色 */
   pairSuit: Suit | null
   isAllTriplets: boolean
@@ -531,8 +533,10 @@ function analyze(input: ScoreInput, rules: Rules): HandAnalysis {
 
   const tripletSuits = new Map<Suit, number>()
   const tripletRanks = new Map<Suit, number[]>()
+  const tripletTiles: Tile[] = []
   const bumpTriplet = (tile: Tile) => {
     const info = parseTile(tile)
+    tripletTiles.push(tile)
     tripletSuits.set(info.suit, (tripletSuits.get(info.suit) ?? 0) + 1)
     if (info.suit !== '字') {
       const ranks = tripletRanks.get(info.suit) ?? []
@@ -699,6 +703,7 @@ function analyze(input: ScoreInput, rules: Rules): HandAnalysis {
     runs,
     tripletSuits,
     tripletRanks,
+    tripletTiles,
     pairSuit: valid?.pair.length ? parseTile(valid.pair[0]).suit : null,
     isAllTriplets,
     isSevenPairs: isSevenPairs(concealed, melds),
@@ -1150,14 +1155,23 @@ export function isSanDaKan(a: HandAnalysis): boolean {
   return false
 }
 
+/** 中发白三种箭牌（只有这 3 种，凑三坎比风牌难得多） */
+const DRAGON_TILES: Tile[] = ['中', '发', '白']
+
 /**
  * 大拿：三大坎 + 同门 2 张。
- * - 数字牌：三组连着的同门坎，且将牌同门（`111222333万 88万 …`）；
- * - 字牌：三组字坎本身就成（`中中中发发发白白白`），将牌不必是分牌。
+ * - 数字牌：三组连着的同门坎 + 同门将（`111222333万 88万 …`）；
+ * - 字牌「中发白」三坎：本身够难，**不需要再配一对字**，将牌随便；
+ * - 其它字牌三坎（如 中/东/南）：必须再配**一对字牌**才算大拿（`中中中 东东东 南南南 西西`）。
  */
 function hasThreeBigKans(a: HandAnalysis): boolean {
   if (!isSanDaKan(a)) return false
-  if ((a.tripletSuits.get('字') ?? 0) >= 3) return true
+  const honorKans = a.tripletTiles.filter(tile => parseTile(tile).suit === '字')
+  if (honorKans.length >= 3) {
+    const isZhongFaBai = DRAGON_TILES.every(tile => a.tripletTiles.includes(tile))
+    if (isZhongFaBai) return true
+    return a.pairSuit === '字'
+  }
   if (!a.pairSuit) return false
   if (a.pairSuit === '字') return false
   return (a.tripletSuits.get(a.pairSuit) ?? 0) >= 3
