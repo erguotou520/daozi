@@ -205,7 +205,7 @@ export function scoreManualSelection(
   for (const name of selection.bigWin) bigWinReasons.push(`命中大拿牌型「${name}」`)
   const values = new Set(items.map(item => item.points))
   if (values.has(30) && values.has(10)) bigWinReasons.push('两个大牌型（30 点 + 10 点），即七对 + 四活')
-  if (total >= rules.bigWinThreshold) bigWinReasons.push(`${total} 点 ≥ ${rules.bigWinThreshold} 点`)
+  // 大拿不再按点数线判：要看这把是不是把其他三家的点数全部清空（算分页不知道各家剩余点数，这里不算大拿）
   const isBigWin = bigWinReasons.length > 0
 
   // —— 摸子 ——

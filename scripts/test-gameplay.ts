@@ -621,12 +621,17 @@ section('4. 大拿牌型：清一色、双通、双棒棒、双四活、一一�
   check('清一色自摸叠 1 小摸子', flushSelf.mozi.units, 1.5)
   check('清一色自摸 = 40 元 + 15 元 = 55 元/家', flushSelf.money.perOpponentTotal, 55)
 
-  // 大拿点数线：B 自摸 52 点
-  const threshold = scoreBoth('大拿点数线', {
-    concealed: [...suitTiles('筒'), '2条', '3条', '4条', '5条', '5条'],
+  // 大拿不看点数线：只看这把有没有把三家点数全部清空
+  const clearHand = {
+    concealed: ['2万', '2万', '2万', '3万', '3万', '3万', '4条', '5条', '6条', '7条', '8条', '9条', '8万', '8万'],
     selfDraw: true
-  })
-  check('52 点 ≥ 50 → 大拿', threshold.bigWin.reasons.some(r => r.name === '点数达到大拿线'), true)
+  }
+  const notCleared = scoreBoth('有一家没清空', { ...clearHand, opponentsPoints: [10, 10, 53] })
+  check('成牌 38 点、但有一家还剩 53 点 → 不算大拿', notCleared.bigWin.isBigWin, false)
+  const cleared = scoreBoth('三家全部清空', { ...clearHand, opponentsPoints: [10, 10, 30] })
+  check('成牌 38 点、三家都被清空 → 大拿', cleared.bigWin.isBigWin, true)
+  const noLineReason = scoreBoth('不再有点数线', { ...clearHand, opponentsPoints: [50, 50, 50] })
+  check('点数够高也没人清空 → 不算大拿', noLineReason.bigWin.isBigWin, false)
 
   // 吸光三家点数
   const zeroed = scoreBoth('吸光三家', {

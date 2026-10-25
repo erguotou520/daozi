@@ -134,8 +134,6 @@ export interface Rules {
   }
   /** 大拿：直接命中即大拿的牌型名 */
   bigWinPatterns: string[]
-  /** 大拿：点数（含倍数）达到该值即大拿 */
-  bigWinThreshold: number
   /** 大拿：两个大牌型（点数）同时命中即大拿，如 [31, 10] */
   bigWinPairs: Array<[number, number]>
   /** 大拿：一把成牌把其他三家的点数全部清零即大拿（需要传入各家剩余点数） */
@@ -208,7 +206,6 @@ export const DEFAULT_RULES: Rules = {
     '自摸大连号',
     '大吊车'
   ],
-  bigWinThreshold: 50,
   bigWinPairs: [[30, 10]],
   bigWinZeroesOpponents: true,
   bigWinMoneyPerPlayer: 40,
@@ -1006,12 +1003,6 @@ export function scoreHand(input: ScoreInput): ScoreResult {
 
   for (const name of rules.bigWinPatterns) {
     if (patternFlags[name]) bigWinReasons.push({ name, detail: `命中大拿牌型「${name}」` })
-  }
-  if (total >= rules.bigWinThreshold) {
-    bigWinReasons.push({
-      name: '点数达到大拿线',
-      detail: `${total} 点 ≥ ${rules.bigWinThreshold} 点`
-    })
   }
   const itemPoints = new Set(items.map(item => item.points))
   for (const [a1, b1] of rules.bigWinPairs) {
