@@ -129,6 +129,8 @@ export interface Rules {
     杠开: number
     /** 枯只压：压当且成牌张是场上最后一张（整十的 20 点，压当那 1 点另算） */
     枯只压: number
+    /** 三大坎：三组刻子/杠（数字牌、字牌都算） */
+    三大坎: number
   }
   /** 大拿：直接命中即大拿的牌型名 */
   bigWinPatterns: string[]
@@ -190,7 +192,8 @@ export const DEFAULT_RULES: Rules = {
     老小对: 5,
     三打一: 5,
     杠开: 5,
-    枯只压: 20
+    枯只压: 20,
+    三大坎: 10
   },
   // 七对本身不是大拿，七对 + 四活 由 bigWinPairs（30 + 10）触发；双连号、双杠已不再是大拿
   bigWinPatterns: [
@@ -803,6 +806,19 @@ export function scoreHand(input: ScoreInput): ScoreResult {
     } else {
       items.push({ name: '杠', points: rules.kongPoints, count: 1, detail: `${meld.kind} ${meld.tile}` })
     }
+  }
+
+  // 三大坎：三组刻子/杠（暗刻、碰、杠都算）。
+  // 字牌没有顺子，三组字牌坎子同样成立——以前只在大拿牌型里按「同门」判断，
+  // 三门各一坎 / 三组字坎这种普通成牌就漏了。
+  if (a.triplets >= 3 && enabled('三大坎')) {
+    patterns['三大坎'] = true
+    items.push({
+      name: '三大坎',
+      points: rules.patternPoints.三大坎,
+      count: 1,
+      detail: `${a.triplets} 组刻子/杠（字牌坎子同样算）`
+    })
   }
 
   // 只子
