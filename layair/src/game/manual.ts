@@ -52,7 +52,7 @@ export function extraOptions(rules: Rules = DEFAULT_RULES): ManualOption[] {
     { name: '大连号', points: p.大连号, hint: '同一门 1–9 齐张' },
     { name: '棒棒', points: p.棒棒, hint: '同一门连续三组对子' },
     { name: '四活', points: p.四活, hint: '四张相同且未开杠' },
-    { name: '三大坎', points: p.三大坎, hint: '三组刻子/杠（含三组字牌坎子）' },
+    { name: '三大坎', points: p.三大坎, hint: '同一门三组刻子/杠，数字要连着（333万444万555万）；字牌任意三组' },
     { name: '不动手', points: p.不动手, hint: '整把没碰过没杠过' },
     { name: '草一色', points: p.草一色, hint: '一门数字花色 + 分牌' },
     { name: '对对胡', points: p.对对胡, hint: '全刻子加一对将' },

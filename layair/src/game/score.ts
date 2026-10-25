@@ -449,6 +449,8 @@ interface HandAnalysis {
   runs: number
   /** 每门刻子/杠的组数（用于「三大坎 + 同门 2 张」） */
   tripletSuits: Map<Suit, number>
+  /** 每门刻子/杠的数字（数字牌要判断「连着」，字牌不计） */
+  tripletRanks: Map<Suit, number[]>
   /** 将牌所在的花色 */
   pairSuit: Suit | null
   isAllTriplets: boolean
@@ -528,11 +530,20 @@ function analyze(input: ScoreInput, rules: Rules): HandAnalysis {
   const kongs = melds.filter(isKong).length
 
   const tripletSuits = new Map<Suit, number>()
-  const bumpTriplet = (suit: Suit) => tripletSuits.set(suit, (tripletSuits.get(suit) ?? 0) + 1)
-  for (const meld of melds) bumpTriplet(parseTile(meld.tile).suit)
+  const tripletRanks = new Map<Suit, number[]>()
+  const bumpTriplet = (tile: Tile) => {
+    const info = parseTile(tile)
+    tripletSuits.set(info.suit, (tripletSuits.get(info.suit) ?? 0) + 1)
+    if (info.suit !== '字') {
+      const ranks = tripletRanks.get(info.suit) ?? []
+      ranks.push(info.rank)
+      tripletRanks.set(info.suit, ranks)
+    }
+  }
+  for (const meld of melds) bumpTriplet(meld.tile)
   if (valid) {
     for (const set of valid.sets) {
-      if (set.kind === 'triplet') bumpTriplet(parseTile(set.tiles[0]).suit)
+      if (set.kind === 'triplet') bumpTriplet(set.tiles[0])
     }
   }
 
@@ -687,6 +698,7 @@ function analyze(input: ScoreInput, rules: Rules): HandAnalysis {
     pungs,
     runs,
     tripletSuits,
+    tripletRanks,
     pairSuit: valid?.pair.length ? parseTile(valid.pair[0]).suit : null,
     isAllTriplets,
     isSevenPairs: isSevenPairs(concealed, melds),
@@ -808,16 +820,15 @@ export function scoreHand(input: ScoreInput): ScoreResult {
     }
   }
 
-  // 三大坎：三组刻子/杠（暗刻、碰、杠都算）。
-  // 字牌没有顺子，三组字牌坎子同样成立——以前只在大拿牌型里按「同门」判断，
-  // 三门各一坎 / 三组字坎这种普通成牌就漏了。
-  if (a.triplets >= 3 && enabled('三大坎')) {
+  // 三大坎：同一门里三组刻子/杠（暗刻、碰、杠都算）。
+  // 数字牌要求三组坎的数字连着（333万 444万 555万）；字牌没有顺序，任意三组字坎都算。
+  if (isSanDaKan(a) && enabled('三大坎')) {
     patterns['三大坎'] = true
     items.push({
       name: '三大坎',
       points: rules.patternPoints.三大坎,
       count: 1,
-      detail: `${a.triplets} 组刻子/杠（字牌坎子同样算）`
+      detail: '同一门三组刻子/杠（数字牌要连着，字牌任意三组）'
     })
   }
 
@@ -1113,12 +1124,42 @@ export function scoreHand(input: ScoreInput): ScoreResult {
   }
 }
 
+/** 一串数字里有没有 3 个连续数字（三大坎要求数字牌连着，比如 3/4/5 万三坎） */
+function hasThreeConsecutiveRanks(ranks: number[]): boolean {
+  const unique = [...new Set(ranks)].sort((x, y) => x - y)
+  for (let i = 0; i + 2 < unique.length; i += 1) {
+    if (unique[i + 1] === unique[i] + 1 && unique[i + 2] === unique[i] + 2) return true
+  }
+  return false
+}
+
 /**
- * 三大坎 + 同门 2 张：至少 3 组刻子/杠，且将牌与其中至少 3 组同门。
- * 用户举例：`111222333万 88万 234条`、`中中中发发发白白白`。 待确认
+ * 三大坎：同一门里三组刻子/杠（暗刻、碰、杠都算）。
+ * - 万/筒/条：三组坎的数字必须**连着**，比如 333万 444万 555万；
+ * - 字牌：字牌没有顺序，任意三组字坎都算（中中中发发发白白白）。
+ */
+export function isSanDaKan(a: HandAnalysis): boolean {
+  if (a.triplets < 3) return false
+  for (const [suit, count] of a.tripletSuits) {
+    if (suit === '字') {
+      if (count >= 3) return true
+      continue
+    }
+    if (count >= 3 && hasThreeConsecutiveRanks(a.tripletRanks.get(suit) ?? [])) return true
+  }
+  return false
+}
+
+/**
+ * 大拿：三大坎 + 同门 2 张。
+ * - 数字牌：三组连着的同门坎，且将牌同门（`111222333万 88万 …`）；
+ * - 字牌：三组字坎本身就成（`中中中发发发白白白`），将牌不必是分牌。
  */
 function hasThreeBigKans(a: HandAnalysis): boolean {
-  if (a.triplets < 3 || !a.pairSuit) return false
+  if (!isSanDaKan(a)) return false
+  if ((a.tripletSuits.get('字') ?? 0) >= 3) return true
+  if (!a.pairSuit) return false
+  if (a.pairSuit === '字') return false
   return (a.tripletSuits.get(a.pairSuit) ?? 0) >= 3
 }
 

@@ -394,40 +394,54 @@ section('2. 成牌张相关：压当、单吊、枯只压、老小对')
  * 3. 七对 / 大吊车 / 三打一 / 杠开 / 清水
  * ------------------------------------------------------------------ */
 
-section('2.5 三大坎：三组刻子/杠，字牌坎子也算')
+section('2.5 三大坎：同门三坎 + 数字连着；字牌任意三坎')
 
 {
-  // 三门各一坎：111万 222筒 333条 + 88万 将 + 456条
+  // 同门连着：333万 444万 555万 + 88筒 将 + 123条
+  const sameSuitRun = {
+    concealed: ['3万', '3万', '3万', '4万', '4万', '4万', '5万', '5万', '5万', '8筒', '8筒', '1条', '2条', '3条'],
+    winTile: '3条'
+  }
+  check('同门 345 万三坎 → 三大坎 +10', itemPoints(sameSuitRun, '三大坎'), 10)
+  check('将牌不同门 → 不算大拿牌型', scoreBoth('同门三坎异将', sameSuitRun).patterns['三大坎+同门2张'], false)
+
+  // 同门不连着不算：111万 222万 999万
+  const notConsecutive = {
+    concealed: ['1万', '1万', '1万', '2万', '2万', '2万', '9万', '9万', '9万', '8万', '8万', '3条', '4条', '5条'],
+    winTile: '5条'
+  }
+  check('同门三坎但数字不连（1/2/9 万）→ 不算三大坎', itemPoints(notConsecutive, '三大坎'), 0)
+  check('不连续也不给大拿牌型', scoreBoth('不连续三坎', notConsecutive).patterns['三大坎+同门2张'], false)
+
+  // 三门各一坎不算：111万 222筒 333条
   const threeSuits = {
     concealed: ['1万', '1万', '1万', '2筒', '2筒', '2筒', '3条', '3条', '3条', '8万', '8万', '4条', '5条', '6条'],
     winTile: '6条'
   }
-  check('三门三坎 → 三大坎 +10', itemPoints(threeSuits, '三大坎'), 10)
-  check('三门三坎不是大拿牌型（不同门）', scoreBoth('三门三坎', threeSuits).patterns['三大坎+同门2张'], false)
+  check('三门各一坎 → 不算三大坎', itemPoints(threeSuits, '三大坎'), 0)
 
-  // 三组字牌坎子：字牌没有顺子，三坎本身成立（将有字将）
-  const honors = {
-    concealed: ['中', '中', '中', '发', '发', '发', '白', '白', '白', '1万', '2万', '3万', '东', '东'],
-    winTile: '东'
+  // 明碰也算坎：碰 1万 + 碰 2万 + 碰 3万 + 88万 将 + 456条
+  const withMelds = {
+    concealed: ['8万', '8万', '4条', '5条', '6条'],
+    melds: [pung('1万'), pung('2万'), pung('3万')],
+    winTile: '6条'
   }
-  check('三组字牌坎子 → 三大坎 +10', itemPoints(honors, '三大坎'), 10)
-  check('三组字牌坎子同时命中大拿「三大坎+同门2张」', scoreBoth('字牌三坎', honors).patterns['三大坎+同门2张'], true)
+  check('碰出来的同门连坎 → 三大坎 +10', itemPoints(withMelds, '三大坎'), 10)
+  check('同门连坎 + 同门将 → 大拿「三大坎+同门2张」', scoreBoth('碰出三大坎', withMelds).patterns['三大坎+同门2张'], true)
 
-  // 字牌坎 + 数字将：只算三大坎，不按同门吃大拿（将牌不同门）
-  const honorsNumberPair = {
+  // 字牌：字牌没有顺序，任意三组字坎都算，中发白直接大拿
+  const honors = {
     concealed: ['中', '中', '中', '发', '发', '发', '白', '白', '白', '1万', '2万', '3万', '9万', '9万'],
     winTile: '9万'
   }
-  check('字牌三坎 + 数字将 → 三大坎 +10', itemPoints(honorsNumberPair, '三大坎'), 10)
-  check('将牌不同门 → 不算大拿牌型', scoreBoth('字牌三坎数字将', honorsNumberPair).patterns['三大坎+同门2张'], false)
+  check('中发白三组字坎 → 三大坎 +10', itemPoints(honors, '三大坎'), 10)
+  check('中发白三组字坎 → 直接大拿（将不必是分牌）', scoreBoth('字牌三坎', honors).patterns['三大坎+同门2张'], true)
 
-  // 明碰也算坎：碰 1筒 + 碰 2筒 + 暗刻 3条 + 88万 将 + 456条
-  const withMelds = {
-    concealed: ['3条', '3条', '3条', '8万', '8万', '4条', '5条', '6条'],
-    melds: [pung('1筒'), pung('2筒')],
-    winTile: '6条'
+  const otherHonors = {
+    concealed: ['东', '东', '东', '南', '南', '南', '西', '西', '西', '1万', '2万', '3万', '8万', '8万'],
+    winTile: '8万'
   }
-  check('碰出来的两组 + 暗刻一组 → 三大坎 +10', itemPoints(withMelds, '三大坎'), 10)
+  check('任意三组字坎（东南西）也算三大坎', itemPoints(otherHonors, '三大坎'), 10)
 
   // 只有两组刻子不算
   const twoKans = {
@@ -514,7 +528,7 @@ section('4. 大拿牌型：清一色、双通、双棒棒、双四活、一一�
         concealed: ['1万', '1万', '1万', '1筒', '1筒', '1筒', '2万', '2万', '2万', '2筒', '2筒', '2筒', '9条', '9条']
       },
       pattern: '双通',
-      total: 49
+      total: 39
     },
     {
       label: '双棒棒',
@@ -538,7 +552,7 @@ section('4. 大拿牌型：清一色、双通、双棒棒、双四活、一一�
         concealed: ['1万', '1万', '1万', '9万', '9万', '9万', '1筒', '1筒', '1筒', '9筒', '9筒', '9筒', '东', '东']
       },
       pattern: '一一九',
-      total: 54
+      total: 44
     },
     {
       label: '三杠',
