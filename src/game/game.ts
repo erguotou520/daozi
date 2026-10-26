@@ -1023,7 +1023,7 @@ function resolveWin(
   state.result = 'win'
   state.lastDiscard = null
   state.logs.push(
-    `${seat} 号位${selfDraw ? '自摸' : '接牌'}成牌，${score.points.total} 点${score.bigWin.isBigWin ? '（大拿）' : ''}`
+    `${seat} 号位${selfDraw ? '自摸' : '接牌'}成牌，${score.bigWin.isBigWin ? '大拿' : `${score.points.total} 点`}`
   )
   return state
 }

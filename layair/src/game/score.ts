@@ -1073,12 +1073,13 @@ export function scoreHand(input: ScoreInput): ScoreResult {
   const amountPerPayer = moneyTotal / payerCount
 
   const details: string[] = []
-  details.push(`成牌底点 ${rules.basePoints} 点`)
-  for (const item of items.slice(1)) details.push(`${item.name} +${item.points}（${item.detail}）`)
-  details.push(`点数小计 ${subtotal} 点${multiplier > 1 ? ` × ${multipliers.join(' × ')}` : ''} = ${total} 点`)
   if (isBigWin) {
+    // 大拿按每家固定 40 元结算，普通点子全部不算，明细里也不列点数
     details.push(`大拿：${bigWinReasons.map(reason => reason.name).join('、')}；普通点子不再计算，按每家 ${rules.bigWinMoneyPerPlayer} 元 + 摸子结算`)
   } else {
+    details.push(`成牌底点 ${rules.basePoints} 点`)
+    for (const item of items.slice(1)) details.push(`${item.name} +${item.points}（${item.detail}）`)
+    details.push(`点数小计 ${subtotal} 点${multiplier > 1 ? ` × ${multipliers.join(' × ')}` : ''} = ${total} 点`)
     details.push(`点数结算：每家 ${pointMoneyPerOpponent} 元（1 点 = ${rules.pointYuan} 元，按 5 元取整）`)
   }
   if (moziUnits > 0) {

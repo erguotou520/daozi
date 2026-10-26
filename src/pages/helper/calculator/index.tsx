@@ -85,17 +85,19 @@ const CalculatorPage = defineComponent({
             <div class="flex items-end justify-between gap-3">
               <div class="min-w-0">
                 <div class="flex items-baseline gap-1.5">
-                  <span class="font-serif text-[2.1rem] leading-none text-ivory">{data.total}</span>
-                  <span class="text-[12px] text-mist">点</span>
-                  {data.isBigWin && (
-                    <span class="ml-1 rounded-[5px] bg-vermillion px-1.5 py-0.5 text-[10px] leading-none text-ivory">
-                      大拿
-                    </span>
+                  {data.isBigWin ? (
+                    <span class="font-serif text-[2.1rem] leading-none text-vermillion">大拿</span>
+                  ) : (
+                    <>
+                      <span class="font-serif text-[2.1rem] leading-none text-ivory">{data.total}</span>
+                      <span class="text-[12px] text-mist">点</span>
+                    </>
                   )}
                 </div>
                 <div class="mt-1.5 truncate text-[11px] text-mist">
-                  {data.multiplier > 1 ? `${data.subtotal} 点 × 2` : `${data.subtotal} 点`}
-                  {data.moziUnits > 0 ? ` · 摸子 ${data.moziBig} 大 ${data.moziSmall} 小` : ''}
+                  {data.isBigWin
+                    ? `大拿不算点数${data.moziUnits > 0 ? ` · 摸子 ${data.moziBig} 大 ${data.moziSmall} 小` : ''}`
+                    : `${data.multiplier > 1 ? `${data.subtotal} 点 × 2` : `${data.subtotal} 点`}${data.moziUnits > 0 ? ` · 摸子 ${data.moziBig} 大 ${data.moziSmall} 小` : ''}`}
                 </div>
               </div>
               <div class="shrink-0 text-right">

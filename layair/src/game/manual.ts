@@ -219,8 +219,9 @@ export function scoreManualSelection(
   const perOpponent = isBigWin ? rules.bigWinMoneyPerPlayer : total * rules.pointYuan
   const moneyTotal = (perOpponent + moziMoney) * 3
 
-  lines.push(`小计 ${subtotal} 点${multiplier > 1 ? ' × 2' : ''} = ${total} 点`)
-  if (isBigWin) lines.push(`大拿：${bigWinReasons.map(reason => reason.replace(/^命中大拿牌型「|」$/g, '')).join('、')}`)
+  // 大拿按每家 40 元结算，不算点数，也不列小计
+  if (!isBigWin) lines.push(`小计 ${subtotal} 点${multiplier > 1 ? ' × 2' : ''} = ${total} 点`)
+  if (isBigWin) lines.push(`大拿：${bigWinReasons.map(reason => reason.replace(/^命中大拿牌型「|」$/g, '')).join('、')}（不算点数，每家 ${rules.bigWinMoneyPerPlayer} 元）`)
   if (moziUnits > 0) {
     lines.push(`摸子 ${moziBig} 大 + ${moziSmall} 小 = ${moziMoney} 元/家`)
   }

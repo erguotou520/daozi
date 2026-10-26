@@ -778,15 +778,18 @@ const TablePage = defineComponent({
                           <span class="text-[11px] text-mist">{win.selfDraw ? '自摸' : '接牌'}</span>
                           {hand!.isFirstHand && <span class="text-[10px] text-mist">首牌</span>}
                           <span class="ml-auto flex items-baseline gap-1">
-                            <span class="font-serif text-[30px] leading-none text-brass">{win.score.points.total}</span>
-                            <span class="text-[12px] text-mist">点</span>
+                            {win.score.bigWin.isBigWin ? (
+                              <span class="font-serif text-[22px] leading-none text-vermillion">大拿</span>
+                            ) : (
+                              <>
+                                <span class="font-serif text-[30px] leading-none text-brass">{win.score.points.total}</span>
+                                <span class="text-[12px] text-mist">点</span>
+                              </>
+                            )}
                           </span>
                         </div>
 
                         <div class="mt-1.5 flex flex-wrap items-center gap-1 px-3">
-                          {win.score.bigWin.isBigWin && (
-                            <span class="rounded-[3px] bg-vermillion px-1.5 text-[11px] leading-5 text-ivory">大拿</span>
-                          )}
                           {hand!.isFirstHand && win.score.bigWin.isBigWin && (
                             <span class="rounded-[3px] bg-brass px-1.5 text-[11px] leading-5 text-ink">清水</span>
                           )}
@@ -797,6 +800,10 @@ const TablePage = defineComponent({
                           {result?.gameOver ? (
                             <span class="ml-auto text-[12px] text-brass">
                               {win.score.money.perOpponentTotal} 元/家 · 合计 {win.score.money.total} 元
+                            </span>
+                          ) : win.score.bigWin.isBigWin ? (
+                            <span class="ml-auto text-[11px] text-brass">
+                              大拿 · {win.score.money.bigWinMoneyPerOpponent} 元/家
                             </span>
                           ) : (
                             <span class="ml-auto text-[11px] text-mist">本局未结束 · 只结算点数</span>

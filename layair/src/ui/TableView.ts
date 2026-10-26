@@ -2164,7 +2164,9 @@ export class TableView {
     }
 
     // 面板高度按内容算，避免一大片空白把别人的亮牌挡住
-    let used = 8 + 14 + 28 + 46 + 38 + 6
+    let used = 8 + 14 + 28 + 46 + 6
+    // 大拿不算点数，牌型明细那一行不画
+    if (!bigWin) used += 38
     if (bigWin) used += 14
     if (kongOpen) used += 14
     if (win.score.mozi.units > 0) used += 14
@@ -2225,19 +2227,13 @@ export class TableView {
         y: y + this.u(3)
       })
     )
-    // 大拿 / 清水 / 杠后赛花徽标跟在「自摸 / 接牌」右侧
+    // 清水 / 杠后赛花徽标跟在「自摸 / 接牌」右侧；大拿本身占的是点数位置，不重复挂徽标
     let badgeX = px + this.u(70) + this.u(40) + this.u(4)
-    if (bigWin) {
-      const badge = this.makeBadge('大拿', COLORS.vermillion, COLORS.ivory)
-      badge.pos(badgeX, y + this.u(1))
-      this.content.addChild(badge)
-      badgeX += badge.width + this.u(4)
-      if (hand.isFirstHand) {
-        const qing = this.makeBadge('清水', COLORS.brass, COLORS.ink)
-        qing.pos(badgeX, y + this.u(1))
-        this.content.addChild(qing)
-        badgeX += qing.width + this.u(4)
-      }
+    if (bigWin && hand.isFirstHand) {
+      const qing = this.makeBadge('清水', COLORS.brass, COLORS.ink)
+      qing.pos(badgeX, y + this.u(1))
+      this.content.addChild(qing)
+      badgeX += qing.width + this.u(4)
     }
     if (kongOpen) {
       const kong = this.makeBadge('杠后赛花', COLORS.brass, COLORS.ink)
@@ -2245,9 +2241,9 @@ export class TableView {
       this.content.addChild(kong)
     }
     this.content.addChild(
-      makeText(`${win.score.points.total}`, {
-        size: this.u(24),
-        color: COLORS.brass,
+      makeText(bigWin ? '大拿' : `${win.score.points.total}`, {
+        size: this.u(bigWin ? 19 : 24),
+        color: bigWin ? COLORS.vermillion : COLORS.brass,
         bold: true,
         font: FONT_SERIF,
         align: 'right',
@@ -2257,16 +2253,19 @@ export class TableView {
         y
       })
     )
-    this.content.addChild(
-      makeText('点', {
-        size: this.u(10),
-        color: COLORS.mist,
-        width: this.u(16),
-        height: this.u(18),
-        x: px + panelW - this.u(20),
-        y: y + this.u(9)
-      })
-    )
+    // 大拿按每家 40 元结算，不显示点数
+    if (!bigWin) {
+      this.content.addChild(
+        makeText('点', {
+          size: this.u(10),
+          color: COLORS.mist,
+          width: this.u(16),
+          height: this.u(18),
+          x: px + panelW - this.u(20),
+          y: y + this.u(9)
+        })
+      )
+    }
     y += this.u(28)
 
     if (bigWin) {
@@ -2308,7 +2307,9 @@ export class TableView {
       makeText(
         gameOver
           ? `${win.score.money.perOpponentTotal} 元/家 · 合计 ${win.score.money.total} 元`
-          : '本局未结束 · 只结算点数',
+          : bigWin
+            ? `大拿 · ${win.score.money.bigWinMoneyPerOpponent} 元/家`
+            : '本局未结束 · 只结算点数',
         {
           size: this.u(10),
           color: gameOver ? COLORS.brass : COLORS.mist,
@@ -2361,23 +2362,26 @@ export class TableView {
     }
     y += this.u(46)
 
-    // 牌型明细：一行按「名字+点」并列铺开，比每个牌型一行省尺寸，也看得出 52 点怎么来的
-    const itemText = win.score.points.items
-      .map(item => `${item.name}${item.points >= 0 ? '+' : ''}${item.points}`)
-      .join(' · ')
-    const subtotal = win.score.points.items.reduce((sum, item) => sum + item.points, 0)
-    const summary = `${itemText}  ＝ 小计 ${subtotal} 点 × ${win.score.points.multiplier} = ${win.score.points.total} 点`
-    const detail = makeText(summary, {
-      size: this.u(9),
-      color: COLORS.mist,
-      width: panelW - this.u(26),
-      height: this.u(40),
-      x: px + this.u(13),
-      y
-    })
-    detail.wordWrap = true
-    detail.overflow = Laya.Text.VISIBLE
-    this.content.addChild(detail)
+    // 牌型明细：一行按「名字+点」并列铺开，比每个牌型一行省尺寸，也看得出 52 点怎么来的。
+    // 大拿不算点数，明细不画。
+    if (!bigWin) {
+      const itemText = win.score.points.items
+        .map(item => `${item.name}${item.points >= 0 ? '+' : ''}${item.points}`)
+        .join(' · ')
+      const subtotal = win.score.points.items.reduce((sum, item) => sum + item.points, 0)
+      const summary = `${itemText}  ＝ 小计 ${subtotal} 点 × ${win.score.points.multiplier} = ${win.score.points.total} 点`
+      const detail = makeText(summary, {
+        size: this.u(9),
+        color: COLORS.mist,
+        width: panelW - this.u(26),
+        height: this.u(40),
+        x: px + this.u(13),
+        y
+      })
+      detail.wordWrap = true
+      detail.overflow = Laya.Text.VISIBLE
+      this.content.addChild(detail)
+    }
   }
 
   private makeBadge(label: string, fill: string, color: string): Laya.Sprite {
@@ -3015,7 +3019,8 @@ export class TableView {
       if (win) {
         for (const stats of [this.history.seats[win.seat], this.roundStats.seats[win.seat]]) {
           stats.wins += 1
-          stats.points += win.score.points.total
+          // 大拿不算点数，统计里也不累加
+          if (!win.score.bigWin.isBigWin) stats.points += win.score.points.total
           stats.moziBig += win.score.mozi.big
           stats.moziSmall += win.score.mozi.small
         }

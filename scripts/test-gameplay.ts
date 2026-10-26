@@ -464,6 +464,33 @@ section('2.5 三大坎：同门三坎 + 数字连着；字牌任意三坎')
     winTile: '8条'
   }
   check('只有两组刻子 → 没有三大坎', itemPoints(twoKans, '三大坎'), 0)
+
+  // 用户实战：11 99筒 + 碰4筒 + 碰6筒 + 碰7条，成 9筒 凑成 999筒 暗刻。
+  // 筒的三坎是 4/6/9，不连着；碰 7 条又不在同一门 → 不算三大坎，更不能大拿。
+  const liveCrossSuit = {
+    concealed: ['1筒', '1筒', '9筒', '9筒'],
+    melds: [pung('4筒'), pung('6筒'), pung('7条')],
+    winTile: '9筒'
+  }
+  check('实战：碰4筒/6筒/7条 + 999筒 → 不算三大坎', itemPoints(liveCrossSuit, '三大坎'), 0)
+  check('实战：跨门三坎不算大拿牌型', scoreBoth('实战跨门三坎', liveCrossSuit).patterns['三大坎+同门2张'], false)
+  check('实战：跨门三坎不是大拿', scoreBoth('实战跨门三坎', liveCrossSuit).bigWin.isBigWin, false)
+
+  // 同一门但不连：碰4筒 + 碰6筒 + 碰7筒 + 999筒，4/6/7 中间断了 5，也不算
+  const sameSuitGap = {
+    concealed: ['1筒', '1筒', '9筒', '9筒'],
+    melds: [pung('4筒'), pung('6筒'), pung('7筒')],
+    winTile: '9筒'
+  }
+  check('同门但 4/6/7 不连 → 不算三大坎', itemPoints(sameSuitGap, '三大坎'), 0)
+  check('4/6/7 同门三坎也不算大拿', scoreBoth('同门不连三坎', sameSuitGap).patterns['三大坎+同门2张'], false)
+
+  // 大拿不算点数：明细里不再列底点 / 牌型点数 / 点数小计
+  const bigWinScore = scoreBoth('大拿明细', withMelds)
+  check('大拿：明细不出现「点数小计」', bigWinScore.details.some(line => line.includes('点数小计')), false)
+  check('大拿：明细不出现「成牌底点」', bigWinScore.details.some(line => line.includes('成牌底点')), false)
+  check('大拿：明细保留大拿说明', bigWinScore.details.some(line => line.includes('大拿')), true)
+  check('大拿：明细保留摸子/金额', bigWinScore.details.some(line => line.includes('每家应付')), true)
 }
 
 section('3. 七对、大吊车、三打一、杠开、清水')
