@@ -735,8 +735,9 @@ export class TableView {
     const w = Math.round(Math.min(300, Math.max(196, this.viewW * 0.34)))
     const fs = Math.max(10, Math.round(w * 0.042))
     const h = fs * 4 + 10
+    const hudX = Math.max(8, this.m.boardW - w - 8)
     const panel = makePanel(w, h, 6, 'rgba(6,26,20,0.66)', 'rgba(217,180,95,0.35)', 1)
-    panel.pos(8, 8)
+    panel.pos(hudX, 8)
     panel.mouseEnabled = false
     const text = makeText(this.camHudText(), {
       size: fs,
@@ -764,7 +765,7 @@ export class TableView {
         this.render()
       }
     })
-    reset.pos(8, 8 + h + 4)
+    reset.pos(hudX, 8 + h + 4)
     reset.mouseEnabled = true
     this.overlay.addChild(reset)
   }
@@ -972,10 +973,24 @@ export class TableView {
       const innerRight = m.landscape
         ? m.boardW / 2 + (m.ringW / 2) * sideScale - m.wallT
         : m.laneRight
-      const cx =
-        seat === 3
-          ? innerLeft + line * stepX + m.discardH / 2
-          : innerRight - line * stepX - m.discardH / 2
+      let cx = 0
+      if (m.landscape) {
+        // 横屏：上家/下家的牌河从手牌内侧往外摆（贴着手牌），不再紧贴牌墙，
+        // 免得手牌和牌河之间空出一大块。
+        const sideBlockW = Math.max(this.u(30), m.sideH)
+        const handEdge = seat === 3 ? this.u(10) + sideBlockW : m.boardW - this.u(10) - sideBlockW
+        const outward = seat === 3 ? handEdge + this.u(6) : handEdge - this.u(6)
+        const limit =
+          seat === 3 ? m.ringX - m.discardH / 2 - this.u(2) : m.ringX + m.ringW + this.u(2) + m.discardH / 2
+        const raw =
+          seat === 3 ? outward + line * stepX + m.discardH / 2 : outward - line * stepX - m.discardH / 2
+        cx = seat === 3 ? Math.min(raw, limit) : Math.max(raw, limit)
+      } else {
+        cx =
+          seat === 3
+            ? innerLeft + line * stepX + m.discardH / 2
+            : innerRight - line * stepX - m.discardH / 2
+      }
       const tile = new TileView(discards[i], {
         width: m.discardW,
         rotate: seat === 3 ? 90 : -90,
@@ -1518,9 +1533,15 @@ export class TableView {
 
     const rack = player && player.melds.length ? this.meldRackHorizontal(player.melds, m.meldW) : null
     const rackW = rack ? rack.width + this.u(8) : 0
+    // 三打一：亮出来的那门单独拎出来，扣着的手牌仍排成一排；
+    // 亮的牌放在副露的反方向（对家的副露在左，亮的牌就放右边），不再混在牌列里暴露张数。
+    const openSuit = !reveal && this.openSeat(2) ? this.openSuit() : null
+    const openTiles = openSuit ? tiles.filter(tile => parseTile(tile).suit === openSuit) : []
+    const closedTiles = openSuit ? tiles.filter(tile => parseTile(tile).suit !== openSuit) : tiles
+    const groupGap = openTiles.length && closedTiles.length ? this.u(8) : 0
     // 亮牌时成牌张和手牌之间留一道缝
     const winGap = reveal && tiles.length > 1 ? this.u(10) : 0
-    const handW = Math.max(0, tiles.length * oppW) + winGap
+    const handW = Math.max(0, tiles.length * oppW) + winGap + groupGap
     const totalW = rackW + handW
     const startX = m.boardW / 2 - totalW / 2
     if (rack) {
@@ -1528,17 +1549,20 @@ export class TableView {
       this.content.addChild(rack)
     }
     let hx = startX + rackW
-    const openSuit = this.openSeat(2) ? this.openSuit() : null
-    for (let i = 0; i < tiles.length; i += 1) {
-      if (i === tiles.length - 1) hx += winGap
-      const face = reveal || (openSuit !== null && parseTile(tiles[i]).suit === openSuit)
-      const tile = face
-        ? new TileView(tiles[i], { width: oppW, marked: reveal && i === tiles.length - 1 })
+    const drawTile = (tile: Tile, face: boolean, marked: boolean) => {
+      const view = face
+        ? new TileView(tile, { width: oppW, marked })
         : new TileView('', { width: oppW, back: true })
-      tile.pos(Math.round(hx), Math.round(y))
-      this.content.addChild(tile)
+      view.pos(Math.round(hx), Math.round(y))
+      this.content.addChild(view)
       hx += oppW
     }
+    for (let i = 0; i < closedTiles.length; i += 1) {
+      if (i === closedTiles.length - 1) hx += winGap
+      drawTile(closedTiles[i], reveal, reveal && i === closedTiles.length - 1)
+    }
+    hx += groupGap
+    for (const tile of openTiles) drawTile(tile, true, false)
 
     if (this.tenpaiSeat === 2) {
       const tileH = Math.round(oppW * TILE_RATIO)
@@ -1562,16 +1586,23 @@ export class TableView {
     const colW = m.sideH
     const sideGap = 0
     const slots = Math.max(2, tiles.length)
+    // 三打一：亮的牌单独拎出来，放在副露的反方向（侧家副露在下方，亮的牌放上方）
+    const openSuit = !reveal && this.openSeat(left ? 3 : 1) ? this.openSuit() : null
+    const openTiles = openSuit ? tiles.filter(tile => parseTile(tile).suit === openSuit) : []
+    const closedTiles = openSuit ? tiles.filter(tile => parseTile(tile).suit !== openSuit) : tiles
+    const groupGap = openTiles.length && closedTiles.length ? this.u(8) : 0
     // 亮牌时成牌张单独留一道缝
     const winGap = reveal && tiles.length > 1 ? this.u(10) : 0
-    const handLen = slots * m.sideW + winGap
+    const handLen = slots * m.sideW + winGap + groupGap
     const rack = player && player.melds.length ? this.meldRackVertical(player.melds, m.meldW, rotate) : null
     // 名字 / 点数 / 缺牌 / 张数横排一行，竖向只占 18px，侧边空间留给手牌
     const infoH = this.u(18)
     const blockH = infoH + handLen + (rack ? this.u(6) + rack.height : 0)
     const blockW = Math.max(this.u(30), colW)
-    // 横屏左右两侧还有余量：把上家/下家的整块（手牌、副露、座位信息）再往两边推一点
-    const sideOut = m.landscape ? this.u(48) : 0
+    // 横屏左右两侧还有余量：把上家/下家的整块（手牌、副露、座位信息）推到贴边，
+    // 中间让出更大的空间给牌墙和牌河。
+    const edgeInset = this.u(10)
+    const sideOut = m.landscape ? Math.max(0, m.ringX - blockW - this.u(6) - edgeInset) : 0
     const rawX = m.landscape
       ? left
         ? m.ringX - blockW - this.u(6) - sideOut
@@ -1579,16 +1610,19 @@ export class TableView {
       : left
         ? this.u(4)
         : m.boardW - this.u(4) - blockW
-    const x = Math.max(this.u(2), Math.min(m.boardW - blockW - this.u(2), rawX))
+    const minX = this.u(2)
+    const x = Math.max(minX, Math.min(m.boardW - blockW - minX, rawX))
     const y = m.boardH / 2 - blockH / 2
 
+    // 横屏左侧被「数据记录 / 声音」图标占住开头一段，侧家信息往右让开，别把名字压到图标底下
+    const metaX = left ? Math.max(x, this.u(8) + this.u(30) + this.u(6)) : x
     this.seatMetaHorizontal(
       left ? '上家' : '下家',
       dealer,
       shortage,
       points,
       count,
-      x,
+      metaX,
       y,
       blockW,
       left ? 'left' : 'right',
@@ -1596,16 +1630,19 @@ export class TableView {
     )
     if (this.is3D()) return
     let cy = y + infoH
-    const openSuit = this.openSeat(left ? 3 : 1) ? this.openSuit() : null
-    for (let i = 0; i < tiles.length; i += 1) {
-      if (i === tiles.length - 1) cy += winGap
-      const face = reveal || (openSuit !== null && parseTile(tiles[i]).suit === openSuit)
-      const tile = face
-        ? new TileView(tiles[i], { width: m.sideW, rotate, stripAtBottom: true, marked: reveal && i === tiles.length - 1 })
+    const drawTile = (tile: Tile, face: boolean, marked: boolean) => {
+      const view = face
+        ? new TileView(tile, { width: m.sideW, rotate, stripAtBottom: true, marked })
         : new TileView('', { width: m.sideW, back: true, rotate, stripAtBottom: true })
-      tile.pos(Math.round(x + blockW / 2), Math.round(cy + m.sideW / 2))
-      this.content.addChild(tile)
+      view.pos(Math.round(x + blockW / 2), Math.round(cy + m.sideW / 2))
+      this.content.addChild(view)
       cy += m.sideW + sideGap
+    }
+    for (const tile of openTiles) drawTile(tile, true, false)
+    cy += groupGap
+    for (let i = 0; i < closedTiles.length; i += 1) {
+      if (i === closedTiles.length - 1) cy += winGap
+      drawTile(closedTiles[i], reveal, reveal && i === closedTiles.length - 1)
     }
 
     if (rack) {
@@ -1710,17 +1747,30 @@ export class TableView {
     const m = this.m
     const tiles = this.myHandTiles()
     if (!tiles.length) return
+    const indexed = tiles.map((tile, index) => ({ tile, index }))
     const gap = Math.max(2, Math.round(m.handW * 0.04))
     // 成牌张单独留一道缝：接牌和自摸都把成的那一张和手牌分开，一眼看得出是哪只成的
     const winTileGap =
       hand.phase === 'over' && hand.winner?.seat === 0 && !!hand.winner.winTile && tiles.length > 1 ? this.u(16) : 0
+    // 三打一：亮的牌从手牌里抽出来，放到副露的反方向（自家副露在右，亮的牌就放左边）
+    const openSuit = hand.phase !== 'over' && hand.threeToOneSeat === 0 ? hand.threeToOneSuit : null
+    const openTiles = openSuit ? indexed.filter(item => parseTile(item.tile).suit === openSuit) : []
+    const closedTiles = openSuit ? indexed.filter(item => parseTile(item.tile).suit !== openSuit) : indexed
+    const groupGap = openTiles.length && closedTiles.length ? this.u(10) : 0
     let handW = m.handW
     let handH = m.handH
-    let handRowW = tiles.length * (handW + gap) - gap + winTileGap
+    const rowWidth = (count: number) => (count ? count * (handW + gap) - gap : 0)
+    let openRowW = rowWidth(openTiles.length)
+    let closedRowW = rowWidth(closedTiles.length) + winTileGap
+    let handRowW = openRowW + groupGap + closedRowW
     if (handRowW > m.boardW - this.u(16)) {
-      handW = Math.floor((m.boardW - this.u(16) - (tiles.length - 1) * gap - winTileGap) / tiles.length)
+      handW = Math.floor(
+        (m.boardW - this.u(16) - groupGap - winTileGap - (tiles.length - 1) * gap) / tiles.length
+      )
       handH = Math.round(handW * TILE_RATIO)
-      handRowW = tiles.length * (handW + gap) - gap + winTileGap
+      openRowW = rowWidth(openTiles.length)
+      closedRowW = rowWidth(closedTiles.length) + winTileGap
+      handRowW = openRowW + groupGap + closedRowW
     }
 
     const melds = hand.players[0].melds
@@ -1734,21 +1784,22 @@ export class TableView {
     const mustShortage = shortageTiles(hand.players[0]).length > 0
     const winPending =
       myTurn && !this.declinedWin && legalActions(hand, 0).some(action => action.type === 'win')
+    const drawnIndex =
+      hand.phase !== 'over' && hand.turn === 0 && hand.drawnTile === tiles[tiles.length - 1] ? tiles.length - 1 : -1
+    const closedStartX = startX + openRowW + groupGap
 
-    for (let i = 0; i < tiles.length; i += 1) {
-      const tile = tiles[i]
-      const isDrawn = hand.phase !== 'over' && hand.drawnTile === tile && i === tiles.length - 1 && hand.turn === 0
+    const drawTile = (item: { tile: Tile; index: number }, tx: number) => {
+      const { tile, index } = item
+      const isDrawn = index === drawnIndex
       const canPlay = myTurn && playable.has(tile) && !winPending
       const isMustPlay = canPlay && mustShortage
       const isForbidden = myTurn && forbidden.has(tile)
       const view = new TileView(tile, {
         width: handW,
-        marked: isMustPlay || (hand.phase === 'over' && i === tiles.length - 1),
+        marked: isMustPlay || (hand.phase === 'over' && index === tiles.length - 1),
         dim: myTurn && !canPlay
       })
-      const tx = Math.round(startX + i * (handW + gap) + (i === tiles.length - 1 ? winTileGap : 0))
-      const ty = Math.round(y - (isDrawn ? this.u(6) : 0))
-      view.pos(tx, ty)
+      view.pos(Math.round(tx), Math.round(y - (isDrawn ? this.u(6) : 0)))
 
       if (isMustPlay) {
         view.graphics.drawRoundRect(0, 0, handW, view.h, 4, 4, 4, 4, null as any, COLORS.brass, 2)
@@ -1762,6 +1813,11 @@ export class TableView {
         view.on(Laya.Event.CLICK, null, () => this.act({ type: 'discard', seat: 0, tile }))
       }
       this.content.addChild(view)
+    }
+
+    for (let i = 0; i < openTiles.length; i += 1) drawTile(openTiles[i], startX + i * (handW + gap))
+    for (let i = 0; i < closedTiles.length; i += 1) {
+      drawTile(closedTiles[i], closedStartX + i * (handW + gap) + (i === closedTiles.length - 1 ? winTileGap : 0))
     }
 
     if (melds.length) {
@@ -2111,7 +2167,14 @@ export class TableView {
     for (const item of items) {
       const w = (item as any).width ?? 0
       const h = (item as any).height ?? this.u(16)
-      item.pos(Math.round(cx), Math.round(y + (barH - h) / 2))
+      if (item instanceof Laya.Text) {
+        // 文字默认 valign='top'，只把文本框居中会让字整体偏上；撑满整条并垂直居中才对得上按钮
+        item.valign = 'middle'
+        item.height = barH
+        item.pos(Math.round(cx), Math.round(y))
+      } else {
+        item.pos(Math.round(cx), Math.round(y + (barH - h) / 2))
+      }
       this.content.addChild(item as Laya.Sprite)
       cx += w + gap
     }
@@ -3360,7 +3423,7 @@ export class TableView {
     this.content.addChild(icon)
   }
 
-  /** 右上角语音开关：喇叭图标，静音时喇叭上压一道叉 */
+  /** 左下角语音开关：喇叭图标，静音时喇叭上压一道叉 */
   private renderVoiceIcon() {
     if (this.phase !== 'idle' && this.phase !== 'playing') return
     if (this.showStats || this.showExit) return
@@ -3390,12 +3453,13 @@ export class TableView {
       voice.toggle()
       this.render()
     })
-    icon.pos(this.m.boardW - size - this.u(8), this.u(8))
+    // 声音收到左下角：和左上角数据记录、右下角分享分开，三个按钮都不压侧家手牌
+    icon.pos(this.u(8), this.m.boardH - size - this.u(8))
     this.content.addChild(icon)
   }
 
   /**
-   * 右上角分享入口（紧挨在语音开关左边）。
+   * 右下角分享入口：和左上角数据记录、左下角声音分开，横屏时不会被小游戏胶囊按钮挡住。
    * 默认只在微信小游戏里画：浏览器 / IDE 预览没有转发能力，按钮点了也没用；
    * 想看版式就在地址栏加 ?share=1。
    */
@@ -3413,7 +3477,8 @@ export class TableView {
     icon.hitArea = new Laya.Rectangle(0, 0, size, size)
     icon.mouseEnabled = true
     icon.on(Laya.Event.CLICK, null, () => this.shareScreenshot())
-    icon.pos(this.m.boardW - size * 2 - this.u(14), this.u(8))
+    // 分享放右下角，和左上角数据记录、左下角声音各占一角，互不遮挡
+    icon.pos(this.m.boardW - size - this.u(8), this.m.boardH - size - this.u(8))
     this.content.addChild(icon)
   }
 

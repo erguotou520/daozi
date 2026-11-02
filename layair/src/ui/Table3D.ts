@@ -40,7 +40,8 @@ const TABLE_D = 1280
 const HAND_EDGE_GAP = TILE_W / 2
 const HAND_Z_SELF = TABLE_D / 2 - HAND_EDGE_GAP - TILE_T / 2
 const HAND_Z_OPP = -HAND_Z_SELF
-const HAND_X_SIDE = TABLE_W / 2 - HAND_EDGE_GAP - TILE_T / 2
+// 侧家手牌再往桌沿推 20，给中间留出更大空间（牌厚 TILE_T，最多推到 627）
+const HAND_X_SIDE = TABLE_W / 2 - HAND_EDGE_GAP - TILE_T / 2 + 20
 /**
  * 牌墙：一墩就是一张平躺的牌，和手里的是同一个模型、同一套尺寸；
  * 不再单独做一套「又细又小」的牌墙（那套比手牌小一半，看着不像牌）。
@@ -58,6 +59,8 @@ const WALL_Z = 520
 const WALL_X = 520
 const WALL_Z_SELF = 520
 const DISCARD_R0 = 416
+/** 左右两家的牌河：在自家牌河基础上再往外推一点，离手牌近一些 */
+const SIDE_DISCARD_R0 = 456
 
 /** 默认视角：俯角 32°（看得清对家牌河）、距离 1420、fov 46 */
 const DEFAULT_CAM_PITCH = 32
@@ -660,14 +663,41 @@ export class Table3D {
     if (!tiles.length) return
     // 牌与牌留 2 的缝：不留缝时一排牌会糊成一条，看不出几张
     const step = Math.min(TILE_W - 0.4, 960 / Math.max(1, tiles.length))
-    const startX = -((tiles.length - 1) * step) / 2
+    // 三打一：亮出来的那门抽出来单独摆，和副露反方向，避免夹在扣着的牌里泄漏张数
+    const isOpen = (tile: Tile) => openSuit !== null && parseTile(tile).suit === openSuit
+    const openGroup = openSuit ? tiles.filter(tile => isOpen(tile)) : []
+    const closedGroup = openSuit ? tiles.filter(tile => !isOpen(tile)) : tiles
+    const hasGroups = openGroup.length > 0 && closedGroup.length > 0
+    const groupGap = hasGroups ? TILE_W * 0.7 : 0
+    // 副露在右边/下方，亮的牌就摆在左边/上方：0、3 号位反向，1、2 号位正向
+    const openFirst = seat === 0 || seat === 3
+    const totalLen = (tiles.length - 1) * step + step + groupGap
+    const start = -totalLen / 2 + step / 2
+    let openCursor = 0
+    let closedCursor = 0
+    const positions: number[] = []
+    for (let i = 0; i < tiles.length; i += 1) {
+      let along = 0
+      if (isOpen(tiles[i])) {
+        along = openFirst
+          ? openCursor
+          : closedGroup.length * step + groupGap + openCursor * step
+        openCursor += 1
+      } else {
+        along = openFirst
+          ? openGroup.length * step + groupGap + closedCursor * step
+          : closedCursor * step
+        closedCursor += 1
+      }
+      positions.push(start + along)
+    }
     for (let i = 0; i < tiles.length; i += 1) {
       const tile = tiles[i]
-      // 三打一：只把三家缺的那门翻开，其余手牌仍扣着
-      const face = seat === 0 || faceUp || (openSuit !== null && parseTile(tile).suit === openSuit)
+      const face = seat === 0 || faceUp || isOpen(tile)
+      const along = positions[i]
       if (seat === 0) {
         // 刚摸到的牌只往右让一点，底部仍和手牌齐平（原先整只抬高 8，看着像往后缩）
-        const x = startX + i * step + (i === drawnIndex ? 7 : 0)
+        const x = along + (i === drawnIndex ? 7 : 0)
         // 选中（第一下点击）：整张牌抬起来、往身前拉一点，明确「就是这张」
         const picked = i === selectedIndex
         const y = TILE_H / 2 + 2 + (picked ? 18 : 0)
@@ -675,17 +705,15 @@ export class Table3D {
         this.addStandingTile(tile, x, y, z, face, this.dynamicRoot, 0, !!dimTiles?.has(tile))
         this.recordSelfHit(tile, i, x, y, z, i === drawnIndex)
       } else if (seat === 2) {
-        const x = startX + i * step
-        this.addStandingTile(tile, x, TILE_H / 2 + 2, HAND_Z_OPP, face, this.dynamicRoot, face ? 0 : 180)
+        this.addStandingTile(tile, along, TILE_H / 2 + 2, HAND_Z_OPP, face, this.dynamicRoot, face ? 0 : 180)
       } else {
-        const z = startX + i * step
         const x = seat === 3 ? -HAND_X_SIDE : HAND_X_SIDE
         // 一张牌的「白面」永远朝向它的主人：
         //   左家（x 负）白面朝 -x → 扣着时整组转 -90，牌背朝 +x（相机这一侧）；
         //   右家（x 正）白面朝 +x → 扣着时整组转 +90，牌背朝 -x。
         // 亮牌时反过来，让白面转向相机。
         const rot = seat === 3 ? (face ? 90 : -90) : face ? -90 : 90
-        this.addStandingTile(tile, x, TILE_H / 2 + 2, z, face, this.dynamicRoot, rot)
+        this.addStandingTile(tile, x, TILE_H / 2 + 2, along, face, this.dynamicRoot, rot)
       }
     }
   }
@@ -733,8 +761,9 @@ export class Table3D {
     const maxCols = 13
     let row = 0
     let col = 0
+    const radialBase = seat === 1 || seat === 3 ? SIDE_DISCARD_R0 : DISCARD_R0
     const colsForRow = (r: number) => {
-      const radial = DISCARD_R0 - r * step
+      const radial = radialBase - r * step
       const sideInner = radial - TILE_H / 2 - 2
       return Math.min(maxCols, Math.max(1, Math.floor((sideInner * 2) / TILE_W)))
     }
@@ -745,7 +774,7 @@ export class Table3D {
         col = 0
       }
       const cols = colsForRow(row)
-      const radial = DISCARD_R0 - row * step
+      const radial = radialBase - row * step
       const tile = tiles[i]
       let x = 0
       let z = 0
@@ -915,11 +944,12 @@ export class Table3D {
       if (seat === 0) {
         // 亮牌只有真拿到成牌张时才把最后一张当「刚摸/成的」错开
         const selfWinTile = hand.phase === 'over' ? hand.winner?.seat === 0 && !!hand.winner.winTile : true
-        this.addSeatHand(0, selfTiles, true, selfWinTile ? selfTiles.length - 1 : -1, selfView?.selectedIndex ?? -1, selfView?.dimTiles)
+        const openSuitSelf = hand.phase !== 'over' && hand.threeToOneSeat === 0 ? hand.threeToOneSuit : null
+        this.addSeatHand(0, selfTiles, true, selfWinTile ? selfTiles.length - 1 : -1, selfView?.selectedIndex ?? -1, selfView?.dimTiles, openSuitSelf)
       } else {
         // 三打一：明牌家只翻开三家缺的那门，其余手牌仍扣着
-        const openSuit = hand.threeToOneSeat === seat ? hand.threeToOneSuit : null
         const reveal = hand.phase === 'over' && winner === seat
+        const openSuit = !reveal && hand.threeToOneSeat === seat ? hand.threeToOneSuit : null
         const tiles = reveal || openSuit
           ? revealHandTiles(hand, seat)
           : dealing
