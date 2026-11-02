@@ -134,8 +134,8 @@ export interface Rules {
   }
   /** 大拿：直接命中即大拿的牌型名 */
   bigWinPatterns: string[]
-  /** 大拿：两个大牌型（点数）同时命中即大拿，如 [31, 10] */
-  bigWinPairs: Array<[number, number]>
+  /** 大拿：两个大牌型（按牌型名，不是按点数）同时命中即大拿，如 ['七对', '四活'] */
+  bigWinPairs: Array<[string, string]>
   /** 大拿：一把成牌把其他三家的点数全部清零即大拿（需要传入各家剩余点数） */
   bigWinZeroesOpponents: boolean
   /** 大拿每家支付金额（元） */
@@ -193,7 +193,9 @@ export const DEFAULT_RULES: Rules = {
     枯只压: 20,
     三大坎: 10
   },
-  // 七对本身不是大拿，七对 + 四活 由 bigWinPairs（30 + 10）触发；双连号、双杠已不再是大拿
+  // 七对本身不是大拿，七对 + 四活 由 bigWinPairs（按牌型名成对）触发；双连号、双杠已不再是大拿。
+  // 注意：不能按「30 点 + 10 点」匹配，否则大吊车(30)+对对胡(10) 这类任意 30+10 都会误报大拿。
+
   bigWinPatterns: [
     '清一色',
     '双棒棒',
@@ -206,7 +208,7 @@ export const DEFAULT_RULES: Rules = {
     '自摸大连号',
     '大吊车'
   ],
-  bigWinPairs: [[30, 10]],
+  bigWinPairs: [['七对', '四活']],
   bigWinZeroesOpponents: true,
   bigWinMoneyPerPlayer: 40,
   pointYuan: 0.5,
@@ -792,9 +794,7 @@ export function scoreHand(input: ScoreInput): ScoreResult {
     }
   }
 
-  let concealedTriplets = 0
   for (const [tile, sets] of concealedTripletsByTile) {
-    concealedTriplets += sets
     const borrowed = borrowedTripletTile === tile ? 1 : 0
     const concealedSets = sets - borrowed
     if (concealedSets > 0) {
@@ -915,13 +915,21 @@ export function scoreHand(input: ScoreInput): ScoreResult {
     items.push({ name: '对对胡', points: rules.patternPoints.对对胡, count: 1, detail: '全刻子 + 一对将' })
   }
 
+  // 大吊车：碰/杠四组全部亮在桌上，成牌前手里只剩一张（手把一独），
+  // 成牌张正好补将，而且纯理论上只等这一张。暗刻/对子留在手里凑数不算。
+  const isHandSingleWait =
+    input.concealed.length === 2 &&
+    !!input.winTile &&
+    input.concealed.every(tile => tile === input.winTile)
   const isDaDiaoChe =
+    enabled('大吊车') &&
     a.isAllTriplets &&
     a.winTileRole === 'pair' &&
-    melds.length + concealedTriplets === 4 &&
-    enabled('大吊车')
+    a.winTileOnlyWait &&
+    isHandSingleWait &&
+    melds.length === 4
   if (isDaDiaoChe) {
-    items.push({ name: '大吊车', points: rules.patternPoints.大吊车, count: 1, detail: '对对胡 + 手把一独单吊' })
+    items.push({ name: '大吊车', points: rules.patternPoints.大吊车, count: 1, detail: '碰/杠四组后手把一独单吊' })
   }
 
   // 压当 / 单吊
@@ -1004,12 +1012,12 @@ export function scoreHand(input: ScoreInput): ScoreResult {
   for (const name of rules.bigWinPatterns) {
     if (patternFlags[name]) bigWinReasons.push({ name, detail: `命中大拿牌型「${name}」` })
   }
-  const itemPoints = new Set(items.map(item => item.points))
+  const itemNames = new Set(items.map(item => item.name))
   for (const [a1, b1] of rules.bigWinPairs) {
-    if (itemPoints.has(a1) && itemPoints.has(b1)) {
+    if (itemNames.has(a1) && itemNames.has(b1)) {
       bigWinReasons.push({
         name: '两个大牌型',
-        detail: `同时命中 ${a1} 点与 ${b1} 点牌型`
+        detail: `同时命中「${a1}」与「${b1}」两个大牌型`
       })
     }
   }

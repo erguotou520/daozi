@@ -203,8 +203,12 @@ export function scoreManualSelection(
   // —— 大拿 ——
   const bigWinReasons: string[] = []
   for (const name of selection.bigWin) bigWinReasons.push(`命中大拿牌型「${name}」`)
-  const values = new Set(items.map(item => item.points))
-  if (values.has(30) && values.has(10)) bigWinReasons.push('两个大牌型（30 点 + 10 点），即七对 + 四活')
+  // 两个大牌型（七对 + 四活）按牌型名成对判定；不能按「30 点 + 10 点」，
+  // 否则大吊车(30) + 对对胡(10) 这类任意 30+10 都会误成大拿。
+  const names = new Set(items.map(item => item.name))
+  for (const [a, b] of rules.bigWinPairs) {
+    if (names.has(a) && names.has(b)) bigWinReasons.push(`两个大牌型：${a} + ${b}`)
+  }
   // 大拿不再按点数线判：要看这把是不是把其他三家的点数全部清空（算分页不知道各家剩余点数，这里不算大拿）
   const isBigWin = bigWinReasons.length > 0
 

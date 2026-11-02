@@ -420,6 +420,38 @@ console.log('='.repeat(72))
   check('禁打点炮：付款人只有 1 个', banned.money.payerCount, 1)
 }
 
+// 用户实例：碰 5万 / 9筒 / 1筒，手里 6777筒，接 6筒成牌 —— 三组副露，不是大吊车
+{
+  const melds = [pung('5万'), pung('9筒'), pung('1筒')]
+  const result = scoreHand({
+    concealed: ['6筒', '7筒', '7筒', '7筒', '6筒'],
+    melds,
+    winTile: '6筒'
+  })
+  console.log(`\n[三组副露 6777筒 接 6筒] ${result.details.join(' | ')}`)
+  check('不是大吊车（副露只有三组、手里也不是手把一独）', result.patterns['大吊车'], false)
+  check('不是单吊（5/6/8 筒都能成）', result.patterns['单吊'] ?? false, false)
+  check('不是两个大牌型', result.bigWin.reasons.some(reason => reason.name === '两个大牌型'), false)
+  check('不触发大拿', result.bigWin.isBigWin, false)
+  check('28 点（底 4 + 暗刻 2 + 碰 3 + 只子 4 + 对对胡 10 + 老小对 5）', result.points.total, 28)
+}
+
+// 用户实例：碰白板 / 碰 1条 / 暗杠北风 / 碰 7万，单吊 4万接牌成 —— 大吊车成立，但没有两个大牌型
+{
+  const melds: Meld[] = [pung('白'), pung('1条'), kong('北', '暗杠'), pung('7万')]
+  const result = scoreHand({
+    concealed: ['4万', '4万'],
+    melds,
+    winTile: '4万'
+  })
+  console.log(`\n[碰×3 + 暗杠 + 单吊 4万] ${result.details.join(' | ')}`)
+  check('大吊车命中（碰/杠四组 + 手把一独单吊）', result.patterns['大吊车'], true)
+  check('单吊命中', result.patterns['单吊'], true)
+  check('不是两个大牌型（大吊车 + 对对胡不是七对 + 四活）', result.bigWin.reasons.some(reason => reason.name === '两个大牌型'), false)
+  check('仍是大拿（大吊车本身）', result.bigWin.isBigWin, true)
+  check('50 点（底 4 + 碰 3 + 杠 2 + 对对胡 10 + 大吊车 30 + 单吊 1）', result.points.total, 50)
+}
+
 // 掷骰与座位
 {
   console.log('\n[掷骰与座位]')
