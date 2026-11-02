@@ -1095,14 +1095,36 @@ section('9. 牌墙、流局、结算、AI')
   const aiClaimAction = chooseAIAction(aiClaim, 1)
   check('AI：能碰时选择碰', aiClaimAction?.type === 'claim' ? aiClaimAction.claim : aiClaimAction?.type, '碰')
 
-  // AI：能暗杠时选择杠
+  // AI：同时能碰能杠时选碰——碰留一张在手里就是四活（+10），杠没有
+  const aiClaimKong = ready(baseHands(), basePiles(), ['万', '万', '万', '万'])
+  aiClaimKong.players[0].hand = ['7筒', '1万', '2万', '3万', '1条', '2条', '3条', '4条', '5条', '6条', '9条']
+  aiClaimKong.players[1].hand = ['7筒', '7筒', '7筒', '1万', '2万', '3万', '1条', '2条', '3条', '4条', '5条', '6条', '9条']
+  aiClaimKong.phase = 'claim'
+  aiClaimKong.turn = 1
+  aiClaimKong.pendingClaims = [1]
+  aiClaimKong.lastDiscard = { tile: '7筒', seat: 0 }
+  const aiClaimKongAction = chooseAIAction(aiClaimKong, 1)
+  check('AI：碰比杠更会保四活', aiClaimKongAction?.type === 'claim' ? aiClaimKongAction.claim : aiClaimKongAction?.type, '碰')
+
+  // AI：暗杠会把四活（+10）杠掉，只多 1 点 + 一次补牌，所以留着不杠
   const aiKong = ready(baseHands(), basePiles(), ['筒', '条', '万', '条'])
   aiKong.players[0].hand = ['1万', '1万', '1万', '1万', '2筒', '3筒', '4筒', '5筒', '6筒', '7筒', '8筒', '9筒', '2条']
   aiKong.phase = 'discard'
   aiKong.turn = 0
   aiKong.drawnTile = '1万'
   const aiKongAction = chooseAIAction(aiKong, 0)
-  check('AI：能暗杠时选择杠', aiKongAction?.type === 'kong' ? aiKongAction.kind : aiKongAction?.type, '暗杠')
+  check('AI：暗杠会丢四活所以不杠', aiKongAction?.type === 'kong' ? aiKongAction.kind : aiKongAction?.type, 'discard')
+
+  // AI：用户实例——碰 7筒 后又摸到 7筒，不能加杠（789 顺子 + 四活 + 双四活潜力更值）
+  const aiSaveFour = ready(baseHands(), basePiles(), ['万', '万', '万', '万'])
+  aiSaveFour.players[0].hand = ['4筒', '5筒', '7筒', '8筒', '8筒', '8筒', '9筒', '1万', '2万', '3万', '4条']
+  aiSaveFour.players[0].melds = [{ kind: '碰', tile: '7筒' }]
+  aiSaveFour.phase = 'discard'
+  aiSaveFour.turn = 0
+  aiSaveFour.drawnTile = '7筒'
+  const aiSaveFourAction = chooseAIAction(aiSaveFour, 0)
+  check('AI：碰 7筒 再摸 7筒 不加杠', aiSaveFourAction?.type === 'kong' ? aiSaveFourAction.kind : aiSaveFourAction?.type, 'discard')
+  check('AI：这一手优先打缺门的万子、不拆 7筒', aiSaveFourAction?.type === 'discard' ? ['1万', '2万', '3万'].includes(aiSaveFourAction.tile) : false, true)
 
   // AI：出牌阶段不会返回 null
   const aiDiscard = ready(baseHands(), basePiles(), ['万', '条', '条', '条'])

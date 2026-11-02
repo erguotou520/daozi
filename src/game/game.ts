@@ -9,9 +9,11 @@
 import {
   HONORS,
   NUMBER_SUITS,
+  allTiles,
   countsOf,
   decompose,
   isHonor,
+  isKong,
   meldTiles,
   parseTile,
   scoreHand,
@@ -1111,11 +1113,16 @@ export function revealHandTiles(hand: HandState, seat: number): Tile[] {
 
 /* ------------------------------------------------------------------ *
  * 简易 AI（确定性，便于复现）
- * 出牌启发式：优先清缺门；之后留搭子（对子、相邻张），先弃孤张、
- * 单张字牌、边张。能碰就碰（副露加点、加快成牌）。
+ *
+ * 用一套「手牌价值」评估来做出牌 / 碰杠决策：
+ * - 牌型潜力：四活（含碰出的三张 + 手里第 4 张）、双四活、只子、通、
+ *   棒棒、连号、草一色/清一色、对对胡、大吊车、不动手；
+ * - 结构：刻子/顺子（已完成的面子）、对子、搭子，越接近成牌越高；
+ * - 杠要「杠完比留着更值」才杠：碰出三张后再摸到第四张会丢四活 +10，
+ *   所以 AI 会留着它去凑顺子/四活，而不是加杠。碰比杠更能保住四活。
  * ------------------------------------------------------------------ */
 
-/** 一张牌留在手里的价值：越低越该打出去 */
+/** 一张牌留在手里的价值：越低越该打出去（用于同分时兜底排序） */
 function keepValue(hand: Tile[], tile: Tile): number {
   const info = parseTile(tile)
   const rest = [...hand]
@@ -1136,6 +1143,215 @@ function keepValue(hand: Tile[], tile: Tile): number {
   return copies * 4 + (nearest === 0 ? 0 : nearest === 1 ? 2.5 : nearest === 2 ? 1 : 0) + middleBonus
 }
 
+/** 手牌 + 副露里每张牌的总张数（碰展开 3 张、杠展开 4 张） */
+function tileCountsOf(concealed: Tile[], melds: Meld[]): Map<Tile, number> {
+  const counts = new Map<Tile, number>()
+  for (const tile of allTiles(concealed, melds)) counts.set(tile, (counts.get(tile) ?? 0) + 1)
+  return counts
+}
+
+/** 手牌结构：已完成面子 / 刻子 / 对子 / 搭子 / 孤张（都不含副露） */
+interface HandShape {
+  sets: number
+  triplets: number
+  pairs: number
+  partials: number
+  isolated: number
+}
+
+function handShape(concealed: Tile[]): HandShape {
+  const counts = countsOf(concealed)
+  const shape: HandShape = { sets: 0, triplets: 0, pairs: 0, partials: 0, isolated: 0 }
+  for (const suit of NUMBER_SUITS) {
+    const ranks = new Array<number>(10).fill(0)
+    for (const [tile, n] of counts) {
+      const info = parseTile(tile)
+      if (info.suit === suit) ranks[info.rank] = n
+    }
+    // 刻子
+    for (let rank = 1; rank <= 9; rank += 1) {
+      if (ranks[rank] >= 3) {
+        shape.sets += 1
+        shape.triplets += 1
+        ranks[rank] -= 3
+      }
+    }
+    // 顺子（从小到大贪心）
+    for (let rank = 1; rank <= 7; rank += 1) {
+      while (ranks[rank] > 0 && ranks[rank + 1] > 0 && ranks[rank + 2] > 0) {
+        shape.sets += 1
+        ranks[rank] -= 1
+        ranks[rank + 1] -= 1
+        ranks[rank + 2] -= 1
+      }
+    }
+    // 对子
+    for (let rank = 1; rank <= 9; rank += 1) {
+      if (ranks[rank] >= 2) {
+        shape.pairs += 1
+        ranks[rank] -= 2
+      }
+    }
+    // 搭子 / 孤张
+    for (let rank = 1; rank <= 9; rank += 1) {
+      if (ranks[rank] <= 0) continue
+      if (rank <= 8 && ranks[rank + 1] > 0) shape.partials += 1
+      else if (rank <= 7 && ranks[rank + 2] > 0) shape.partials += 1
+      else shape.isolated += 1
+    }
+  }
+  for (const honor of HONORS) {
+    const n = counts.get(honor) ?? 0
+    if (n >= 3) {
+      shape.sets += 1
+      shape.triplets += 1
+      shape.isolated += n - 3
+    } else if (n === 2) shape.pairs += 1
+    else if (n === 1) shape.isolated += 1
+  }
+  return shape
+}
+
+/** 手牌（含副露）的当前价值：点数潜力 + 结构，越高越值得保留 */
+function evaluateHand(concealed: Tile[], melds: Meld[]): number {
+  const shape = handShape(concealed)
+  const counts = tileCountsOf(concealed, melds)
+  const konged = new Set(melds.filter(isKong).map(meld => meld.tile))
+  let value = 0
+
+  // 副露本身已有的点数：碰 +1、杠 +2
+  for (const meld of melds) value += meld.kind === '碰' ? 1 : 2
+
+  // 四活：四张未开杠（碰出的三张 + 手里第 4 张也算）；双四活是大拿
+  let fours = 0
+  let threes = 0
+  for (const [tile, n] of counts) {
+    if (n === 4 && !konged.has(tile)) fours += 1
+    else if (n === 3) threes += 1
+  }
+  value += fours * 10
+  if (fours >= 2) value += 60
+  else if (fours === 1) value += threes * 4
+
+  // 只子：同一门 ≥8 张开始加点
+  for (const suit of NUMBER_SUITS) {
+    let suitCount = 0
+    for (const [tile, n] of counts) if (parseTile(tile).suit === suit) suitCount += n
+    if (suitCount >= 8) value += Math.min(suitCount - 7, 5)
+    else if (suitCount === 7) value += 0.5
+  }
+
+  // 通：同一数字跨两门 ≥5 张
+  for (let rank = 1; rank <= 9; rank += 1) {
+    const suits = NUMBER_SUITS.filter(suit => (counts.get(tileOf(suit, rank)) ?? 0) > 0)
+    if (suits.length < 2) continue
+    const total = suits.reduce((sum, suit) => sum + (counts.get(tileOf(suit, rank)) ?? 0), 0)
+    if (total >= 5) value += Math.min(total, 8) * 0.6
+  }
+
+  // 棒棒（连续三组对子，副露也算）与连号（只看手牌）
+  for (const suit of NUMBER_SUITS) {
+    const pairRanks = new Set<number>()
+    const handRanks = new Set<number>()
+    for (const [tile, n] of counts) {
+      const info = parseTile(tile)
+      if (info.suit === suit && n >= 2) pairRanks.add(info.rank)
+    }
+    for (const tile of concealed) {
+      const info = parseTile(tile)
+      if (info.suit === suit) handRanks.add(info.rank)
+    }
+    for (let start = 1; start <= 7; start += 1) {
+      if ([0, 1, 2].every(offset => pairRanks.has(start + offset))) {
+        value += 5
+        break
+      }
+    }
+    if ([1, 2, 3, 4, 5, 6, 7, 8, 9].every(rank => handRanks.has(rank))) value += 20
+    else {
+      for (let start = 1; start <= 4; start += 1) {
+        if ([0, 1, 2, 3, 4, 5].every(offset => handRanks.has(start + offset))) {
+          value += 5
+          break
+        }
+      }
+    }
+  }
+
+  // 草一色 / 清一色
+  const numberSuits = new Set<NumberSuit>()
+  let hasHonor = false
+  for (const [tile] of counts) {
+    const info = parseTile(tile)
+    if (info.suit === '字') hasHonor = true
+    else numberSuits.add(info.suit)
+  }
+  if (numberSuits.size === 1) value += hasHonor ? 10 : 30
+
+  // 对对胡 / 大吊车形状
+  if (melds.length + shape.triplets >= 4 && shape.pairs >= 1) value += 10
+  if (melds.length === 4 && concealed.length <= 2) value += 30
+
+  // 不动手
+  if (melds.length === 0) value += 5
+
+  // 七对潜力：门清 + 对子多时不要拆
+  if (melds.length === 0 && shape.pairs >= 5) value += 25 + (shape.pairs - 5) * 5
+
+  // 结构：面子最值钱，其次对子、搭子，孤张越少越好
+  value += Math.min(melds.length + shape.sets, 4) * 6
+  value += shape.pairs * 2
+  value += shape.partials * 1.2
+  value -= shape.isolated * 0.3
+
+  return value
+}
+
+/** 手牌里去掉一张后的价值 */
+function discardValue(hand: Tile[], melds: Meld[], tile: Tile): number {
+  const rest = [...hand]
+  const index = rest.indexOf(tile)
+  if (index >= 0) rest.splice(index, 1)
+  return evaluateHand(rest, melds)
+}
+
+/** 碰完/摸完后必须出牌：取「打出后手牌价值最高」的那个结果 */
+function bestDiscardValue(hand: Tile[], melds: Meld[]): number {
+  let best = -Infinity
+  for (const tile of new Set(hand)) {
+    const value = discardValue(hand, melds, tile)
+    if (value > best) best = value
+  }
+  return best
+}
+
+/** 杠后的手牌与副露（补牌是随机的，按 +2.5 的平均价值估算） */
+function afterKong(player: PlayerState, option: KongOption): { hand: Tile[]; melds: Meld[] } {
+  if (option.kind === '暗杠') {
+    return {
+      hand: player.hand.filter(tile => tile !== option.tile),
+      melds: [...player.melds, { kind: '暗杠', tile: option.tile }]
+    }
+  }
+  const hand = [...player.hand]
+  const index = hand.indexOf(option.tile)
+  if (index >= 0) hand.splice(index, 1)
+  const melds = player.melds.map(meld =>
+    meld.kind === '碰' && meld.tile === option.tile ? { kind: '明杠' as MeldKind, tile: meld.tile } : meld
+  )
+  return { hand, melds }
+}
+
+/**
+ * 杠不杠：杠完的牌型价值 + 补牌期望 必须超过留着不杠。
+ * 碰出三张再摸到第四张时，留着就是四活 +10，杠只 +2 还会把四活杠掉，所以不杠。
+ */
+function shouldKong(player: PlayerState, option: KongOption): boolean {
+  const before = evaluateHand(player.hand, player.melds)
+  const after = afterKong(player, option)
+  return evaluateHand(after.hand, after.melds) + 2.5 > before
+}
+
 export function chooseAIAction(state: HandState, seat: number): RoundAction | null {
   const actions = legalActions(state, seat)
   if (!actions.length) return null
@@ -1153,18 +1369,40 @@ export function chooseAIAction(state: HandState, seat: number): RoundAction | nu
   if (state.phase === 'claim') {
     const win = actions.find(action => action.type === 'claim' && action.claim === '成')
     if (win) return win
-    // 简单策略：能杠就杠，能碰就碰（副露记点、加快成牌），否则过
-    const kong = actions.find(action => action.type === 'claim' && action.claim === '杠')
-    if (kong) return kong
+
     const peng = actions.find(action => action.type === 'claim' && action.claim === '碰')
-    if (peng) return peng
+    const kong = actions.find(action => action.type === 'claim' && action.claim === '杠')
+    const tile = state.lastDiscard?.tile
+    if (!tile) return { type: 'pass', seat }
+
+    if (peng && kong) {
+      // 碰留着第 4 张在手里 → 四活 +10；杠没有四活，只多 1 点 + 一次补牌。
+      const pongHand = removeCopies(player.hand, tile, 2)
+      const pongMelds: Meld[] = [...player.melds, { kind: '碰', tile }]
+      const pongValue = bestDiscardValue(pongHand, pongMelds)
+      const kongHand = removeCopies(player.hand, tile, 3)
+      const kongMelds: Meld[] = [...player.melds, { kind: '明杠', tile }]
+      const kongValue = evaluateHand(kongHand, kongMelds) + 2.5
+      return kongValue > pongValue + 6 ? kong : peng
+    }
+    if (peng) {
+      const pongHand = removeCopies(player.hand, tile, 2)
+      const pongMelds: Meld[] = [...player.melds, { kind: '碰', tile }]
+      // 碰会破坏七对/连号之类时宁可过
+      return bestDiscardValue(pongHand, pongMelds) >= evaluateHand(player.hand, player.melds) - 1
+        ? peng
+        : { type: 'pass', seat }
+    }
+    if (kong) return kong
     return { type: 'pass', seat }
   }
   if (state.phase === 'discard') {
     const win = actions.find(action => action.type === 'win')
     if (win) return win
+
     const kong = actions.find(action => action.type === 'kong')
-    if (kong) return kong
+    if (kong && kong.type === 'kong' && shouldKong(player, { tile: kong.tile, kind: kong.kind })) return kong
+
     const discards = actions.filter(
       (action): action is Extract<RoundAction, { type: 'discard' }> => action.type === 'discard'
     )
@@ -1172,11 +1410,30 @@ export function chooseAIAction(state: HandState, seat: number): RoundAction | nu
     const shortage = shortageTiles(player)
     const pool = shortage.length ? discards.filter(action => isShortageTile(player, action.tile)) : discards
     const candidates = pool.length ? pool : discards
-    // 剩一张时没得选；多张时留价值最低的打出去（确定性：同分取先）
+    // 剩一张时没得选；多张时比较「打出后还剩多少价值」，同分再按留牌价值兜底（确定性）
     if (candidates.length === 1) return candidates[0]
-    return candidates.reduce((best, action) =>
-      keepValue(player.hand, action.tile) < keepValue(player.hand, best.tile) ? action : best
-    )
+    return candidates.reduce((best, action) => {
+      const value = discardValue(player.hand, player.melds, action.tile)
+      const bestValue = discardValue(player.hand, player.melds, best.tile)
+      if (value > bestValue + 1e-9) return action
+      if (Math.abs(value - bestValue) <= 1e-9) {
+        const keep = keepValue(player.hand, action.tile)
+        const bestKeep = keepValue(player.hand, best.tile)
+        if (keep < bestKeep) return action
+      }
+      return best
+    })
   }
   return null
+}
+
+/** 从手牌里拿走 n 张指定牌（用于估算碰/杠后的手牌） */
+function removeCopies(hand: Tile[], tile: Tile, count: number): Tile[] {
+  const rest = [...hand]
+  for (let i = 0; i < count; i += 1) {
+    const index = rest.indexOf(tile)
+    if (index < 0) break
+    rest.splice(index, 1)
+  }
+  return rest
 }
